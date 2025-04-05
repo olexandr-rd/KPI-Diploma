@@ -37,6 +37,7 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'monitoring'
 ]
 
 MIDDLEWARE = [
@@ -54,7 +55,7 @@ ROOT_URLCONF = 'Diploma.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [BASE_DIR / 'templates']
+        'DIRS': [BASE_DIR / 'monitoring/templates']
         ,
         'APP_DIRS': True,
         'OPTIONS': {
@@ -76,8 +77,12 @@ WSGI_APPLICATION = 'Diploma.wsgi.application'
 
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': 'diploma',  # From PyCharm
+        'USER': 'energymanager',  # From PyCharm
+        'PASSWORD': '102vyno.J',  # From PyCharm
+        'HOST': 'localhost',  # Local machine
+        'PORT': '5432',  # Or whatever PyCharm shows
     }
 }
 
