@@ -1,0 +1,45 @@
+<!-- monitoring/templates/monitoring/dashboard.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Energy Dashboard</title>
+    <style>
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-family: sans-serif;
+        }
+        th, td {
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+        }
+        .anomaly {
+            background-color: #ffcccc;
+        }
+    </style>
+</head>
+<body>
+    <h1>📊 Energy System Dashboard</h1>
+    <table>
+        <tr>
+            <th>Time</th>
+            <th>Load (W)</th>
+            <th>Predicted</th>
+            <th>Anomaly</th>
+            <th>Score</th>
+            <th>Backup</th>
+        </tr>
+        {% for log in logs %}
+        <tr class="{% if log.is_anomaly %}anomaly{% endif %}">
+            <td>{{ log.timestamp }}</td>
+            <td>{{ log.load_power|floatformat:2 }}</td>
+            <td>{{ log.predicted_load|default:"–" }}</td>
+            <td>{{ log.is_anomaly }}</td>
+            <td>{{ log.anomaly_score|floatformat:2 }}</td>
+            <td>{{ log.backup_triggered }}</td>
+        </tr>
+        {% endfor %}
+    </table>
+</body>
+</html>
