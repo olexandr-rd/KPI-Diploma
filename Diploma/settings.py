@@ -78,11 +78,11 @@ WSGI_APPLICATION = 'Diploma.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'diploma',  # From PyCharm
-        'USER': 'energymanager',  # From PyCharm
-        'PASSWORD': '102vyno.J',  # From PyCharm
-        'HOST': 'localhost',  # Local machine
-        'PORT': '5432',  # Or whatever PyCharm shows
+        'NAME': 'diploma',
+        'USER': 'energymanager',
+        'PASSWORD': '102vyno.J',
+        'HOST': 'localhost',
+        'PORT': '5432',
     }
 }
 

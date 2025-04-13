@@ -1,14 +1,19 @@
-<!-- monitoring/templates/monitoring/dashboard.html -->
+<!-- monitoring/templates/dashboard.html -->
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <title>Energy Dashboard</title>
     <style>
+        body {
+            font-family: sans-serif;
+            margin: 20px;
+            line-height: 1.4;
+        }
         table {
             width: 100%;
             border-collapse: collapse;
-            font-family: sans-serif;
+            margin-bottom: 30px;
         }
         th, td {
             padding: 8px 12px;
@@ -17,29 +22,112 @@
         .anomaly {
             background-color: #ffcccc;
         }
+        .success {
+            background-color: #ccffcc;
+        }
+        .failed {
+            background-color: #ffcccc;
+        }
+        .dashboard-section {
+            margin-bottom: 40px;
+        }
+        h2 {
+            border-bottom: 1px solid #ddd;
+            padding-bottom: 5px;
+        }
+        .stats-box {
+            display: inline-block;
+            background-color: #f5f5f5;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 10px 15px;
+            margin-right: 15px;
+            margin-bottom: 15px;
+        }
+        .stats-title {
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        .stats-value {
+            font-size: 20px;
+            text-align: center;
+        }
     </style>
 </head>
 <body>
     <h1>📊 Energy System Dashboard</h1>
-    <table>
-        <tr>
-            <th>Time</th>
-            <th>Load (W)</th>
-            <th>Predicted</th>
-            <th>Anomaly</th>
-            <th>Score</th>
-            <th>Backup</th>
-        </tr>
-        {% for log in logs %}
-        <tr class="{% if log.is_anomaly %}anomaly{% endif %}">
-            <td>{{ log.timestamp }}</td>
-            <td>{{ log.load_power|floatformat:2 }}</td>
-            <td>{{ log.predicted_load|default:"–" }}</td>
-            <td>{{ log.is_anomaly }}</td>
-            <td>{{ log.anomaly_score|floatformat:2 }}</td>
-            <td>{{ log.backup_triggered }}</td>
-        </tr>
-        {% endfor %}
-    </table>
+
+    <!-- Stats Section -->
+    <div class="dashboard-section">
+        <h2>System Statistics</h2>
+        <div class="stats-box">
+            <div class="stats-title">Total Logs</div>
+            <div class="stats-value">{{ stats.total_logs }}</div>
+        </div>
+        <div class="stats-box">
+            <div class="stats-title">Anomalies</div>
+            <div class="stats-value">{{ stats.anomaly_count }}</div>
+        </div>
+        <div class="stats-box">
+            <div class="stats-title">Successful Backups</div>
+            <div class="stats-value">{{ stats.backup_success }}</div>
+        </div>
+        <div class="stats-box">
+            <div class="stats-title">Failed Backups</div>
+            <div class="stats-value">{{ stats.backup_failed }}</div>
+        </div>
+        <div class="stats-box">
+            <div class="stats-title">Storage Used</div>
+            <div class="stats-value">{{ stats.storage_used|floatformat:2 }} MB</div>
+        </div>
+    </div>
+
+    <!-- Energy Logs Section -->
+    <div class="dashboard-section">
+        <h2>Recent Energy Logs</h2>
+        <table>
+            <tr>
+                <th>Time</th>
+                <th>Load (W)</th>
+                <th>Predicted</th>
+                <th>Anomaly</th>
+                <th>Score</th>
+                <th>Backup</th>
+            </tr>
+            {% for log in logs %}
+            <tr class="{% if log.is_anomaly %}anomaly{% endif %}">
+                <td>{{ log.timestamp }}</td>
+                <td>{{ log.load_power|floatformat:2 }}</td>
+                <td>{{ log.predicted_load|default:"–" }}</td>
+                <td>{{ log.is_anomaly }}</td>
+                <td>{{ log.anomaly_score|floatformat:2 }}</td>
+                <td>{{ log.backup_triggered }}</td>
+            </tr>
+            {% endfor %}
+        </table>
+    </div>
+
+    <!-- Backup Logs Section -->
+    <div class="dashboard-section">
+        <h2>Backup History</h2>
+        <table>
+            <tr>
+                <th>Time</th>
+                <th>File</th>
+                <th>Size</th>
+                <th>Status</th>
+                <th>Trigger</th>
+            </tr>
+            {% for backup in backups %}
+            <tr class="{% if backup.status == 'SUCCESS' %}success{% elif backup.status == 'FAILED' %}failed{% endif %}">
+                <td>{{ backup.timestamp }}</td>
+                <td>{{ backup.backup_file }}</td>
+                <td>{{ backup.size_kb|floatformat:2 }} KB</td>
+                <td>{{ backup.status }}</td>
+                <td>{{ backup.trigger_reason }}</td>
+            </tr>
+            {% endfor %}
+        </table>
+    </div>
 </body>
 </html>

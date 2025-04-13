@@ -20,3 +20,16 @@ class EnergyLog(models.Model):
 
     def __str__(self):
         return f"[{self.timestamp}] Load: {self.load_power}W | Anomaly: {self.is_anomaly}"
+
+
+class BackupLog(models.Model):
+    timestamp = models.DateTimeField(auto_now_add=True)
+    backup_file = models.CharField(max_length=255)
+    status = models.CharField(max_length=20)  # SUCCESS, FAILED
+    size_kb = models.FloatField(default=0)
+    trigger_reason = models.CharField(max_length=20)  # ANOMALY, MANUAL, SCHEDULED
+    error_message = models.CharField(max_length=255, blank=True, null=True)
+    triggered_by = models.ManyToManyField(EnergyLog, blank=True, related_name='backups')
+
+    def __str__(self):
+        return f"Backup {self.id} - {self.timestamp} - {self.status}"
