@@ -53,33 +53,17 @@ def apply_models_to_record(record_id=None):
     record.save()
 
     # === Load Forecasting ===
-    # For forecasting, we'll need previous records to predict the next one
-    # Get the previous record to use for forecasting the next load
-    prev_records = EnergyLog.objects.filter(timestamp__lt=record.timestamp).order_by('-timestamp')[:1]
+    # For the current record, predict what the next load will be
+    predicted_next_load = forecast_model.predict(features)[0]
 
-    # If we have a previous record, we can predict the next load
-    predicted_load = None
-    if prev_records.exists():
-        prev_record = prev_records.first()
-        prev_features = pd.DataFrame({
-            'ac_output_voltage': [prev_record.ac_output_voltage],
-            'dc_battery_voltage': [prev_record.dc_battery_voltage],
-            'dc_battery_current': [prev_record.dc_battery_current],
-            'load_power': [prev_record.load_power],
-            'temperature': [prev_record.temperature]
-        })
-
-        # Predict load for the current record
-        predicted_load = forecast_model.predict(prev_features)[0]
-
-        # Update the current record with the prediction
-        record.predicted_load = predicted_load
-        record.save()
+    # Update the current record with the prediction for the NEXT load
+    record.predicted_load = predicted_next_load
+    record.save()
 
     print(f"Applied models to record {record.id}")
-    print(f"Is anomaly: {is_anomaly}, Score: {anomaly_score}, Predicted load: {predicted_load}")
+    print(f"Is anomaly: {is_anomaly}, Score: {anomaly_score}, Predicted next load: {predicted_next_load}")
 
-    return is_anomaly, anomaly_score, predicted_load
+    return is_anomaly, anomaly_score, predicted_next_load
 
 
 if __name__ == "__main__":

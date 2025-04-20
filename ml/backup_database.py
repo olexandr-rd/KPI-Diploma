@@ -11,20 +11,27 @@ os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'Diploma.settings')
 django.setup()
 
 from django.conf import settings
-from monitoring.models import EnergyLog
+from monitoring.models import EnergyLog, BackupLog
 
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=[logging.FileHandler('backup.log'), logging.StreamHandler()]
+    handlers=[logging.FileHandler('logs/backup.log'), logging.StreamHandler()]
 )
 logger = logging.getLogger('backup')
+
+# Define threshold for predicted load
+PREDICTED_LOAD_MIN = 500  # Minimum acceptable predicted load
+PREDICTED_LOAD_MAX = 2000  # Maximum acceptable predicted load
 
 
 def backup_database(record_id=None, force=False):
     """
-    Create a backup of the PostgreSQL database if record is anomalous or forced
+    Create a backup of the PostgreSQL database if:
+    1. Record is anomalous OR
+    2. Predicted load is outside normal range OR
+    3. Force parameter is True
 
     Args:
         record_id: ID of record to check, or None for latest
@@ -39,9 +46,31 @@ def backup_database(record_id=None, force=False):
     else:
         record = EnergyLog.objects.latest('timestamp')
 
-    # Check if backup needed
-    if not force and not record.is_anomaly:
-        logger.info(f"Record {record.id} is not anomalous, no backup needed")
+    # Determine backup reason
+    trigger_reason = None
+
+    # Check all conditions that might trigger a backup
+    is_anomalous = record.is_anomaly
+    predicted_load_abnormal = False
+
+    if record.predicted_load is not None:
+        if record.predicted_load < PREDICTED_LOAD_MIN or record.predicted_load > PREDICTED_LOAD_MAX:
+            predicted_load_abnormal = True
+            logger.info(
+                f"Predicted load {record.predicted_load:.2f}W is outside normal range ({PREDICTED_LOAD_MIN}-{PREDICTED_LOAD_MAX}W)")
+
+    # Determine trigger reason in clear priority order
+    if force:
+        trigger_reason = "MANUAL"
+    elif is_anomalous:
+        trigger_reason = "ANOMALY"
+    elif predicted_load_abnormal:
+        trigger_reason = "PREDICTION"
+
+    # If no reason to backup, exit
+    if trigger_reason is None:
+        logger.info(
+            f"Record {record.id} does not need backup (anomaly={is_anomalous}, pred_load_abnormal={predicted_load_abnormal})")
         return False
 
     # Get database settings
@@ -67,7 +96,7 @@ def backup_database(record_id=None, force=False):
         ]
 
         # Execute backup
-        logger.info(f"Starting database backup to {backup_file}")
+        logger.info(f"Starting database backup to {backup_file} (reason: {trigger_reason})")
         process = subprocess.Popen(
             cmd,
             env=dict(os.environ, PGPASSWORD=db_settings['PASSWORD']),
@@ -79,6 +108,20 @@ def backup_database(record_id=None, force=False):
         if process.returncode == 0:
             logger.info(f"Backup completed successfully: {backup_file}")
 
+            # Get file size in KB
+            file_size_kb = os.path.getsize(backup_file) / 1024
+
+            # Create backup log entry
+            backup_log = BackupLog.objects.create(
+                backup_file=os.path.basename(backup_file),
+                status="SUCCESS",
+                size_kb=file_size_kb,
+                trigger_reason=trigger_reason or "UNKNOWN"
+            )
+
+            # Associate backup with the triggering record
+            backup_log.triggered_by.add(record)
+
             # Mark record as backed up
             record.backup_triggered = True
             record.save()
@@ -88,6 +131,19 @@ def backup_database(record_id=None, force=False):
         else:
             error_msg = stderr.decode('utf-8')
             logger.error(f"Backup failed: {error_msg}")
+
+            # Create failed backup log entry
+            backup_log = BackupLog.objects.create(
+                backup_file=os.path.basename(backup_file),
+                status="FAILED",
+                size_kb=0,
+                trigger_reason=trigger_reason or "UNKNOWN",
+                error_message=error_msg[:255]  # Truncate if needed
+            )
+
+            # Associate backup with the triggering record
+            backup_log.triggered_by.add(record)
+
             return False
 
     except Exception as e:

@@ -1,0 +1,21 @@
+<!-- monitoring/templates/partials/logs_table.html -->
+<table>
+    <tr>
+        <th>Час</th>
+        <th>Навантаження (Вт)</th>
+        <th>Прогнозоване</th>
+        <th>Аномалія</th>
+        <th>Оцінка</th>
+        <th>Резервна копія</th>
+    </tr>
+    {% for log in logs %}
+    <tr class="{% if log.is_anomaly %}anomaly{% endif %}">
+        <td>{{ log.timestamp }}</td>
+        <td>{{ log.load_power|floatformat:2 }}</td>
+        <td>{{ log.predicted_load|default:"–" }}</td>
+        <td>{{ log.is_anomaly|yesno:"Так,Ні" }}</td>
+        <td>{{ log.anomaly_score|floatformat:2 }}</td>
+        <td>{{ log.backup_triggered|yesno:"Так,Ні" }}</td>
+    </tr>
+    {% endfor %}
+</table>

@@ -1,2 +1,4 @@
 .idea/
-*pkl
+/ml/backups/
+/ml/model/
+/ml/logs/
