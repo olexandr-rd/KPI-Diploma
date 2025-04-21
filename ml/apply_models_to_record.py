@@ -5,6 +5,10 @@ import django
 import pandas as pd
 import joblib
 import sys
+from pathlib import Path
+
+# Get the absolute path to the project directory
+BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Django setup
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'Diploma.settings')
@@ -24,8 +28,27 @@ def apply_models_to_record(record_id=None):
         tuple: (is_anomaly, anomaly_score, predicted_load)
     """
     # Load models
-    anomaly_model = joblib.load("model/anomaly_model.pkl")
-    forecast_model = joblib.load("model/forecast_model.pkl")
+    model_dir = os.path.join(BASE_DIR, 'ml/model')
+    os.makedirs(model_dir, exist_ok=True)
+
+    anomaly_model_path = os.path.join(model_dir, 'anomaly_model.pkl')
+    forecast_model_path = os.path.join(model_dir, 'forecast_model.pkl')
+
+    # Check if models exist, if not print a helpful error
+    missing_models = []
+    if not os.path.exists(anomaly_model_path):
+        missing_models.append('anomaly_model.pkl')
+    if not os.path.exists(forecast_model_path):
+        missing_models.append('forecast_model.pkl')
+
+    if missing_models:
+        error_msg = f"Missing models: {', '.join(missing_models)}. Please run the training scripts first."
+        print(error_msg)
+        raise FileNotFoundError(error_msg)
+
+    # Load models
+    anomaly_model = joblib.load(anomaly_model_path)
+    forecast_model = joblib.load(forecast_model_path)
 
     # Get the record to analyze
     if record_id:

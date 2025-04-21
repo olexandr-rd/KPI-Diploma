@@ -6,6 +6,14 @@ import numpy as np
 from datetime import datetime
 import logging
 import argparse
+from pathlib import Path
+
+# Get the absolute path to the project directory
+BASE_DIR = Path(__file__).resolve().parent.parent
+
+# Ensure logs directory exists
+logs_dir = os.path.join(BASE_DIR, 'logs')
+os.makedirs(logs_dir, exist_ok=True)
 
 # Django setup
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'Diploma.settings')
@@ -19,7 +27,10 @@ from ml.backup_database import backup_database, PREDICTED_LOAD_MIN, PREDICTED_LO
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=[logging.FileHandler('logs/simulation.log'), logging.StreamHandler()]
+    handlers=[
+        logging.FileHandler(os.path.join(logs_dir, 'simulation.log')),
+        logging.StreamHandler()
+    ]
 )
 logger = logging.getLogger('simulation')
 
@@ -61,7 +72,7 @@ def create_energy_reading(anomaly=False, abnormal_prediction=False):
 
         # The key factor - we want to create a trend that will lead to prediction outside normal range
         # But not so extreme that it triggers anomaly detection
-        load_power = np.random.normal(2000, 50)  # High but not anomalous load
+        load_power = np.random.normal(1800, 50)  # High but not anomalous load
 
         temperature = np.random.normal(38, 1)  # Slightly high temperature
     else:
@@ -103,42 +114,50 @@ def simulate_and_process():
     log = create_energy_reading(args.anomaly, args.abnormal_prediction)
 
     # 2. Apply ML models
-    is_anomaly, anomaly_score, predicted_load = apply_models_to_record(log.id)
+    try:
+        is_anomaly, anomaly_score, predicted_load = apply_models_to_record(log.id)
 
-    # Reload the log to get updated values
-    log.refresh_from_db()
+        # Reload the log to get updated values
+        log.refresh_from_db()
 
-    # 3. Check predicted load
-    is_prediction_abnormal = (predicted_load is not None and
-                              (predicted_load < PREDICTED_LOAD_MIN or
-                               predicted_load > PREDICTED_LOAD_MAX))
+        # 3. Check predicted load
+        is_prediction_abnormal = (predicted_load is not None and
+                                  (predicted_load < PREDICTED_LOAD_MIN or
+                                   predicted_load > PREDICTED_LOAD_MAX))
 
-    # 4. Determine backup reason
-    reason = None
-    if args.force_backup:
-        reason = "MANUAL"
-        logger.info("Manual backup requested via --force-backup flag")
-    elif is_anomaly:
-        reason = "ANOMALY"
-    elif is_prediction_abnormal:
-        reason = "PREDICTION"
+        # 4. Determine backup reason
+        reason = None
+        if args.force_backup:
+            reason = "MANUAL"
+            logger.info("Manual backup requested via --force-backup flag")
+        elif is_anomaly:
+            reason = "ANOMALY"
+        elif is_prediction_abnormal:
+            reason = "PREDICTION"
 
-    # 5. Backup if needed
-    backup_performed = False
+        # 5. Backup if needed
+        backup_performed = False
 
-    if reason:
-        # Only log message if we have a reason to back up
-        if reason == "ANOMALY":
-            logger.info(f"Anomaly detected (score: {anomaly_score}), triggering backup")
-        elif reason == "PREDICTION":
-            logger.info(f"Abnormal prediction detected ({predicted_load:.2f}W), triggering backup")
-        elif reason == "MANUAL":
-            logger.info(f"Manual backup requested")
+        if reason:
+            # Only log message if we have a reason to backup
+            if reason == "ANOMALY":
+                logger.info(f"Anomaly detected (score: {anomaly_score}), triggering backup")
+            elif reason == "PREDICTION":
+                logger.info(f"Abnormal prediction detected ({predicted_load:.2f}W), triggering backup")
+            elif reason == "MANUAL":
+                logger.info(f"Manual backup requested")
 
-        # Perform backup
-        backup_performed = backup_database(log.id, force=(reason == "MANUAL"))
-    else:
-        logger.info(f"No issues detected (anomaly score: {anomaly_score}, prediction: {predicted_load:.2f}W)")
+            # Perform backup
+            backup_performed = backup_database(log.id, force=(reason == "MANUAL"))
+        else:
+            logger.info(f"No issues detected (anomaly score: {anomaly_score}, prediction: {predicted_load:.2f}W)")
+
+    except Exception as e:
+        logger.error(f"Error processing log: {str(e)}")
+        is_anomaly = False
+        is_prediction_abnormal = False
+        backup_performed = False
+        reason = None
 
     return log, is_anomaly, is_prediction_abnormal, backup_performed, reason
 

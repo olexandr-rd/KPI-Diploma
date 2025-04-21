@@ -5,6 +5,18 @@ import django
 import subprocess
 from datetime import datetime
 import logging
+from pathlib import Path
+
+# Get the absolute path to the project directory
+BASE_DIR = Path(__file__).resolve().parent.parent
+
+# Ensure logs directory exists
+logs_dir = os.path.join(BASE_DIR, 'logs')
+os.makedirs(logs_dir, exist_ok=True)
+
+# Ensure backups directory exists
+backups_dir = os.path.join(BASE_DIR, 'backups')
+os.makedirs(backups_dir, exist_ok=True)
 
 # Django setup
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'Diploma.settings')
@@ -17,7 +29,10 @@ from monitoring.models import EnergyLog, BackupLog
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=[logging.FileHandler('logs/backup.log'), logging.StreamHandler()]
+    handlers=[
+        logging.FileHandler(os.path.join(logs_dir, 'backup.log')),
+        logging.StreamHandler()
+    ]
 )
 logger = logging.getLogger('backup')
 
@@ -62,6 +77,7 @@ def backup_database(record_id=None, force=False):
     # Determine trigger reason in clear priority order
     if force:
         trigger_reason = "MANUAL"
+        logger.info("Manual backup requested via force flag")
     elif is_anomalous:
         trigger_reason = "ANOMALY"
     elif predicted_load_abnormal:
@@ -76,13 +92,9 @@ def backup_database(record_id=None, force=False):
     # Get database settings
     db_settings = settings.DATABASES['default']
 
-    # Create backup directory if it doesn't exist
-    backup_dir = 'backups'
-    os.makedirs(backup_dir, exist_ok=True)
-
     # Create backup filename with timestamp
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    backup_file = f"{backup_dir}/energy_data_{timestamp}.sql"
+    backup_file = os.path.join(backups_dir, f"energy_data_{timestamp}.sql")
 
     try:
         # PostgreSQL dump command
@@ -148,6 +160,22 @@ def backup_database(record_id=None, force=False):
 
     except Exception as e:
         logger.error(f"Exception during backup: {str(e)}")
+
+        # Create failed backup log entry
+        try:
+            backup_log = BackupLog.objects.create(
+                backup_file=os.path.basename(backup_file),
+                status="FAILED",
+                size_kb=0,
+                trigger_reason=trigger_reason or "UNKNOWN",
+                error_message=str(e)[:255]  # Truncate if needed
+            )
+
+            # Associate backup with the triggering record
+            backup_log.triggered_by.add(record)
+        except Exception as inner_e:
+            logger.error(f"Failed to log backup failure: {str(inner_e)}")
+
         return False
 
 

@@ -1,12 +1,16 @@
 from django.shortcuts import render
-from django.http import HttpResponse
+# from django.http import HttpResponse
 from monitoring.models import EnergyLog, BackupLog
 import os
 import psutil
 import datetime
 from pathlib import Path
 import subprocess
-import json
+import sys
+# import json
+
+# Get the absolute path to the project directory
+BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Constants from scheduled_tasks.py
 MAX_BACKUPS = 20
@@ -44,7 +48,7 @@ def get_stats():
     last_scheduler_check = now
 
     # First check if scheduler.log exists and when it was last modified
-    scheduler_log_path = Path("scheduler.log")
+    scheduler_log_path = Path(os.path.join(BASE_DIR, "logs", "scheduler.log"))
     if scheduler_log_path.exists():
         last_modified = datetime.datetime.fromtimestamp(scheduler_log_path.stat().st_mtime)
         # If log was modified in the last hour, consider scheduler active
@@ -126,17 +130,30 @@ def backups_partial(request):
 
 
 def run_simulation(request):
-    """Run data simulation and return updated logs table"""
+    """Run data simulation with model application"""
     if request.method == 'POST':
         try:
-            # Run the simulation script
-            result = subprocess.run(
-                ["python", "ml/simulate_data.py"],
-                capture_output=True,
-                text=True
-            )
-            print("Simulation output:", result.stdout)
-            print("Simulation errors:", result.stderr)
+            # Run the simulation directly instead of using subprocess
+            from ml.simulate_data import create_energy_reading, apply_models_to_record
+
+            # 1. Create a new energy reading (normal data)
+            log = create_energy_reading(anomaly=False, abnormal_prediction=False)
+            print(f"Created new energy log with ID: {log.id}")
+
+            # 2. Apply ML models to the new reading
+            is_anomaly, anomaly_score, predicted_load = apply_models_to_record(log.id)
+
+            print(f"Applied models to record {log.id}")
+            print(f"Is anomaly: {is_anomaly}, Score: {anomaly_score}, Predicted next load: {predicted_load}")
+
+            # 3. Check if backup is needed based on anomaly or prediction
+            if is_anomaly or (predicted_load is not None and
+                              (predicted_load < 500 or predicted_load > 2000)):
+                from ml.backup_database import backup_database
+                backup_performed = backup_database(log.id)
+                if backup_performed:
+                    print("Automatic backup performed")
+
         except Exception as e:
             print(f"Error running simulation: {e}")
 
@@ -146,17 +163,25 @@ def run_simulation(request):
 
 
 def force_backup(request):
-    """Force a manual backup and return updated backups table"""
+    """Force a manual backup without creating new data"""
     if request.method == 'POST':
         try:
-            # Run the backup script with force flag
-            result = subprocess.run(
-                ["python", "ml/simulate_data.py", "--force-backup"],
-                capture_output=True,
-                text=True
-            )
-            print("Backup output:", result.stdout)
-            print("Backup errors:", result.stderr)
+            # Get the latest record
+            latest_record = EnergyLog.objects.latest('timestamp')
+
+            print(f"Forcing backup for latest record ID: {latest_record.id}")
+
+            # Import backup function directly
+            from ml.backup_database import backup_database
+
+            # Force backup of the latest record
+            backup_performed = backup_database(latest_record.id, force=True)
+
+            if backup_performed:
+                print("Backup completed successfully")
+            else:
+                print("Backup failed")
+
         except Exception as e:
             print(f"Error forcing backup: {e}")
 

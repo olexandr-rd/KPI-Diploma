@@ -6,9 +6,13 @@ import logging
 import time
 import schedule
 import subprocess
-# import shutil
-# from datetime import datetime, timedelta
+import sys
+from datetime import datetime
 from pathlib import Path
+
+
+# Get the absolute path to the project directory
+BASE_DIR = Path(__file__).resolve().parent.parent
 
 # Django setup
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'Diploma.settings')
@@ -16,11 +20,18 @@ django.setup()
 
 from monitoring.models import EnergyLog, BackupLog
 
+# Create logs directory if it doesn't exist
+logs_dir = os.path.join(BASE_DIR, 'logs')
+os.makedirs(logs_dir, exist_ok=True)
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=[logging.FileHandler('logs/scheduler.log'), logging.StreamHandler()]
+    handlers=[
+        logging.FileHandler(os.path.join(logs_dir, 'scheduler.log')),
+        logging.StreamHandler()
+    ]
 )
 logger = logging.getLogger('scheduler')
 
@@ -30,26 +41,47 @@ MAX_ENERGY_LOGS = 5000
 
 
 def run_data_simulation():
-    """Run the data simulation script"""
+    """Run the data simulation directly"""
     logger.info("Running scheduled data simulation")
 
     try:
-        # Run the simulation script
-        result = subprocess.run(
-            ["python", "ml/simulate_data.py"],
-            capture_output=True,
-            text=True
-        )
+        # Import needed functions directly
+        from ml.simulate_data import create_energy_reading
+        from ml.apply_models_to_record import apply_models_to_record
+        from ml.backup_database import backup_database, PREDICTED_LOAD_MIN, PREDICTED_LOAD_MAX
 
-        if result.returncode == 0:
-            logger.info("Data simulation completed successfully")
-            logger.debug(f"Output: {result.stdout}")
+        # 1. Create a new energy reading
+        log = create_energy_reading(anomaly=False, abnormal_prediction=False)
+        logger.info(f"Created new energy log with ID: {log.id}")
+
+        # 2. Apply ML models
+        is_anomaly, anomaly_score, predicted_load = apply_models_to_record(log.id)
+        logger.info(f"Applied models to record {log.id}")
+        logger.info(f"Is anomaly: {is_anomaly}, Score: {anomaly_score}, Predicted next load: {predicted_load}")
+
+        # 3. Check if backup is needed
+        if is_anomaly:
+            logger.info(f"Anomaly detected (score: {anomaly_score}), triggering backup")
+            backup_performed = backup_database(log.id)
+            if backup_performed:
+                logger.info("Backup completed successfully")
+            else:
+                logger.info("Backup failed")
+        elif predicted_load is not None and (
+                predicted_load < PREDICTED_LOAD_MIN or predicted_load > PREDICTED_LOAD_MAX):
+            logger.info(f"Abnormal prediction detected ({predicted_load:.2f}W), triggering backup")
+            backup_performed = backup_database(log.id)
+            if backup_performed:
+                logger.info("Backup completed successfully")
+            else:
+                logger.info("Backup failed")
         else:
-            logger.error(f"Data simulation failed with exit code {result.returncode}")
-            logger.error(f"Error: {result.stderr}")
+            logger.info(f"No issues detected - no backup needed")
 
     except Exception as e:
         logger.error(f"Exception during data simulation: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
 
 
 def cleanup_old_backups():
@@ -57,7 +89,7 @@ def cleanup_old_backups():
     logger.info(f"Cleaning up old backups (keeping {MAX_BACKUPS} most recent)")
 
     try:
-        backup_dir = Path("backups")
+        backup_dir = Path(os.path.join(BASE_DIR, "backups"))
 
         # Ensure the backup directory exists
         if not backup_dir.exists():
@@ -127,24 +159,57 @@ def run_maintenance():
 
 def start_scheduler():
     """Start the scheduler with all scheduled tasks"""
-    logger.info("Starting scheduler")
+    logger.info(f"Starting scheduler from directory: {os.getcwd()}")
+    logger.info(f"Python executable: {sys.executable}")
+    logger.info(f"BASE_DIR: {BASE_DIR}")
 
-    # Schedule data simulation every 15 minutes
-    schedule.every(15).minutes.do(run_data_simulation)
-    logger.info("Scheduled data simulation every 15 minutes")
-
-    # Schedule maintenance tasks once a day (at midnight)
-    schedule.every().day.at("00:00").do(run_maintenance)
-    logger.info("Scheduled daily maintenance at midnight")
+    # Run initial data simulation immediately
+    logger.info("Running initial data simulation")
+    run_data_simulation()
 
     # Run initial maintenance
     logger.info("Running initial maintenance")
     run_maintenance()
 
+    # Schedule data simulation every 15 minutes
+    logger.info("Scheduling data simulation every 15 minutes")
+    schedule.every(15).minutes.do(run_data_simulation)
+
+    # Schedule maintenance tasks once a day (at midnight)
+    logger.info("Scheduling daily maintenance at midnight")
+    schedule.every().day.at("00:00").do(run_maintenance)
+
+    # Log initial schedule information
+    logger.info("Current schedule:")
+    for job in schedule.jobs:
+        next_run = job.next_run
+        if next_run:
+            time_until = (next_run - datetime.now()).total_seconds() / 60
+            logger.info(f"- Job {job.job_func.__name__} will run in {time_until:.1f} minutes")
+        else:
+            logger.info(f"- Job {job.job_func.__name__} has no next run time")
+
     # Keep the scheduler running
+    logger.info("Entering scheduler loop")
     while True:
+        n_jobs = len(schedule.jobs)
+        logger.info(f"Checking scheduled jobs ({n_jobs} jobs in queue)")
+
         schedule.run_pending()
-        time.sleep(1)
+
+        # Sleep for 60 seconds to reduce excessive logging, but still reasonable for 15-minute schedule
+        time.sleep(60)
+
+        # Periodically log schedule information (once every 5 minutes)
+        if datetime.now().minute % 5 == 0 and datetime.now().second < 2:
+            logger.info("Periodic schedule check:")
+            for job in schedule.jobs:
+                next_run = job.next_run
+                if next_run:
+                    time_until = (next_run - datetime.now()).total_seconds() / 60
+                    logger.info(f"- Job {job.job_func.__name__} will run in {time_until:.1f} minutes")
+                else:
+                    logger.info(f"- Job {job.job_func.__name__} has no next run time")
 
 
 if __name__ == "__main__":
