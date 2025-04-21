@@ -5,7 +5,7 @@ import django
 import logging
 import time
 import schedule
-import subprocess
+# import subprocess
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -162,6 +162,10 @@ def start_scheduler():
     logger.info(f"Starting scheduler from directory: {os.getcwd()}")
     logger.info(f"Python executable: {sys.executable}")
     logger.info(f"BASE_DIR: {BASE_DIR}")
+
+    # Clear any existing jobs (to prevent duplicates)
+    schedule.clear()
+    logger.info("Cleared existing scheduled jobs")
 
     # Run initial data simulation immediately
     logger.info("Running initial data simulation")
