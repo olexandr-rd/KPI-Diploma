@@ -5,7 +5,8 @@ from django.contrib.auth.decorators import login_required
 from django.http import JsonResponse
 from django.db.models import Count, Avg, Max, Sum, Q
 from django.db.models.functions import TruncDay, TruncWeek, TruncMonth, ExtractHour
-from datetime import datetime, timedelta
+from datetime import timedelta
+from django.utils import timezone
 
 from ..models import EnergyLog, BackupLog
 
@@ -13,11 +14,11 @@ from ..models import EnergyLog, BackupLog
 @login_required
 def analytics(request):
     """Main analytics view with charts"""
-    # Get time period from query params, default to month
+    # Get a time period from query params, default to month
     period = request.GET.get('period', 'month')
 
     # Get date ranges for context
-    now = datetime.now()
+    now = timezone.now()
     if period == 'week':
         start_date = now - timedelta(days=7)
         period_display = "тиждень"
@@ -85,7 +86,7 @@ def load_trend_chart(request):
     period = request.GET.get('period', 'month')
 
     # Determine start date and truncation function based on period
-    now = datetime.now()
+    now = timezone.now()
     if period == 'week':
         start_date = now - timedelta(days=7)
         trunc_func = TruncDay
@@ -172,7 +173,7 @@ def load_trend_chart(request):
 def anomalies_by_month_chart(request):
     """AJAX endpoint for anomalies by month chart data"""
     # Get last 12 months of data
-    end_date = datetime.now()
+    end_date = timezone.now()
     start_date = end_date - timedelta(days=365)
 
     # Get anomaly counts by month
@@ -234,7 +235,7 @@ def backups_by_reason_chart(request):
     period = request.GET.get('period', 'month')
 
     # Determine start date based on period
-    now = datetime.now()
+    now = timezone.now()
     if period == 'week':
         start_date = now - timedelta(days=7)
     elif period == 'year':

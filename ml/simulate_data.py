@@ -8,10 +8,12 @@ import logging
 import argparse
 from pathlib import Path
 
+from django.utils import timezone
+
 # Get the absolute path to the project directory
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-# Ensure logs directory exists
+# Ensure the logs directory exists
 logs_dir = os.path.join(BASE_DIR, 'logs')
 os.makedirs(logs_dir, exist_ok=True)
 
@@ -104,7 +106,7 @@ def create_energy_reading(anomaly=False, abnormal_prediction=False, is_manual=Fa
 
     # Save to DB
     log = EnergyLog.objects.create(
-        timestamp=datetime.now(),
+        timestamp=timezone.now(),
         ac_output_voltage=ac_output_voltage,
         dc_battery_voltage=dc_battery_voltage,
         dc_battery_current=dc_battery_current,

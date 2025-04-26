@@ -6,8 +6,8 @@ import logging
 import time
 import schedule
 import sys
-from datetime import datetime
 from pathlib import Path
+from django.utils import timezone
 
 # Get the absolute path to the project directory
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -18,7 +18,7 @@ django.setup()
 
 from monitoring.models import EnergyLog, BackupLog, SystemSettings
 
-# Create logs directory if it doesn't exist
+# Create a logs directory if it doesn't exist
 logs_dir = os.path.join(BASE_DIR, 'logs')
 os.makedirs(logs_dir, exist_ok=True)
 
@@ -202,7 +202,7 @@ def start_scheduler():
     for job in schedule.jobs:
         next_run = job.next_run
         if next_run:
-            time_until = (next_run - datetime.now()).total_seconds() / 60
+            time_until = (next_run - timezone.now()).total_seconds() / 60
             logger.info(f"- Job {job.job_func.__name__} will run in {time_until:.1f} minutes")
         else:
             logger.info(f"- Job {job.job_func.__name__} has no next run time")
@@ -219,18 +219,18 @@ def start_scheduler():
         time.sleep(60)
 
         # Periodically log schedule information (once every 5 minutes)
-        if datetime.now().minute % 5 == 0 and datetime.now().second < 2:
+        if timezone.now().minute % 5 == 0 and timezone.now().second < 2:
             logger.info("Periodic schedule check:")
             for job in schedule.jobs:
                 next_run = job.next_run
                 if next_run:
-                    time_until = (next_run - datetime.now()).total_seconds() / 60
+                    time_until = (next_run - timezone.now()).total_seconds() / 60
                     logger.info(f"- Job {job.job_func.__name__} will run in {time_until:.1f} minutes")
                 else:
                     logger.info(f"- Job {job.job_func.__name__} has no next run time")
 
             # Check if we need to reload settings (once per hour)
-            if datetime.now().minute < 5:
+            if timezone.now().minute < 5:
                 settings = get_system_settings()
                 logger.info(
                     f"Reloaded system settings: backup_frequency={settings.backup_frequency_hours}h, max_logs={settings.max_energy_logs}")

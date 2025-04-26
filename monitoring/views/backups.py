@@ -6,6 +6,8 @@ from django.core.paginator import Paginator
 from django.db.models import Q
 from datetime import datetime, timedelta
 
+from django.utils import timezone
+
 from ..models import BackupLog, UserProfile, SystemSettings, EnergyLog
 
 
@@ -40,7 +42,7 @@ def backups_list(request):
         backups = backups.filter(trigger_reason=reason)
 
     # Time filters
-    now = datetime.now()
+    now = timezone.now()
     if period == 'day':
         start_date = now - timedelta(days=1)
         backups = backups.filter(timestamp__gte=start_date)

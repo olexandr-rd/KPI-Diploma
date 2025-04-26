@@ -2,6 +2,7 @@
 
 from django.db import models
 from django.contrib.auth.models import User
+from django.utils import timezone
 
 
 class UserProfile(models.Model):
@@ -19,12 +20,12 @@ class UserProfile(models.Model):
 
     @property
     def is_manager(self):
-        """Check if user has manager or higher permissions"""
+        """Check if a user has manager or higher permissions"""
         return self.role in ['manager', 'admin']
 
     @property
     def is_admin(self):
-        """Check if user has admin permissions"""
+        """Check if a user has admin permissions"""
         return self.role == 'admin'
 
 

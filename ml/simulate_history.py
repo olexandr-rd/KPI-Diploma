@@ -1,8 +1,8 @@
 import os
 import django
 import numpy as np
-from datetime import datetime, timedelta
-import random
+from datetime import timedelta
+from django.utils import timezone
 
 # Django setup
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'Diploma.settings')
@@ -16,7 +16,7 @@ EnergyLog.objects.all().delete()
 # Simulation parameters
 days = 30
 entries_per_day = 96  # 15-minute intervals
-start_time = datetime.now() - timedelta(days=days)
+start_time = timezone.now() - timedelta(days=days)
 num_entries = days * entries_per_day
 
 for i in range(num_entries):

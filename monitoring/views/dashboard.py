@@ -6,6 +6,7 @@ import os
 import psutil
 import datetime
 from pathlib import Path
+from django.utils import timezone
 
 from ..models import EnergyLog, BackupLog, SystemSettings, UserProfile
 
@@ -13,7 +14,7 @@ from ..models import EnergyLog, BackupLog, SystemSettings, UserProfile
 def get_stats():
     """Helper function to get system statistics"""
     # Get current time
-    now = datetime.datetime.now()
+    now = timezone.now()
 
     # Get settings
     settings = SystemSettings.objects.first() or SystemSettings()
@@ -25,8 +26,9 @@ def get_stats():
     backup_failed = BackupLog.objects.filter(status="FAILED").count()
 
     # Get recent logs distribution
-    recent_logs = EnergyLog.objects.all().order_by('-timestamp')[:1000]
-    manual_count = recent_logs.filter(is_manual=True).count()
+    recent_logs_base = EnergyLog.objects.all().order_by('-timestamp')
+    recent_logs = recent_logs_base[:1000]  # слайс тільки для отримання всього набору
+    manual_count = recent_logs_base.filter(is_manual=True)[:1000].count()
     auto_count = recent_logs.count() - manual_count
 
     # Calculate storage used by backups
@@ -72,8 +74,8 @@ def get_stats():
     # First check if scheduler.log exists and when it was last modified
     scheduler_log_path = Path(os.path.join(BASE_DIR, "logs", "scheduler.log"))
     if scheduler_log_path.exists():
-        last_modified = datetime.datetime.fromtimestamp(scheduler_log_path.stat().st_mtime)
-        # If log was modified in the last hour, consider scheduler active
+        last_modified_naive = datetime.datetime.fromtimestamp(scheduler_log_path.stat().st_mtime)
+        last_modified = timezone.make_aware(last_modified_naive)
         if (now - last_modified).total_seconds() < 3600:
             last_scheduler_check = last_modified
             scheduler_active = True

@@ -1,13 +1,10 @@
-from django.shortcuts import render
-# from django.http import HttpResponse
-from monitoring.models import EnergyLog, BackupLog
 import os
 import psutil
 import datetime
 from pathlib import Path
-# import subprocess
-# import sys
-# import json
+from django.shortcuts import render
+from django.utils import timezone
+from monitoring.models import EnergyLog, BackupLog
 
 # Get the absolute path to the project directory
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -20,7 +17,7 @@ MAX_ENERGY_LOGS = 5000
 def get_stats():
     """Helper function to get system statistics"""
     # Get current time
-    now = datetime.datetime.now()
+    now = timezone.now()
 
     # Calculate statistics
     total_logs = EnergyLog.objects.count()

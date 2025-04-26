@@ -10,6 +10,7 @@ from pathlib import Path
 from django.shortcuts import render, redirect
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
+from django.utils import timezone
 
 from .models import UserProfile
 
@@ -48,7 +49,7 @@ def get_scheduler_info():
         'is_running': True,
         'pid': proc.pid,
         'started_at': datetime.datetime.fromtimestamp(proc.create_time()),
-        'uptime': datetime.datetime.now() - datetime.datetime.fromtimestamp(proc.create_time()),
+        'uptime': timezone.now() - datetime.datetime.fromtimestamp(proc.create_time()),
         'status': 'Активний',
     }
 
@@ -59,7 +60,7 @@ def get_scheduler_info():
     except:
         info['memory_mb'] = None
 
-    # Check log file
+    # Check a log file
     try:
         BASE_DIR = Path(__file__).resolve().parent.parent
         log_file = os.path.join(BASE_DIR, 'logs', 'scheduler.log')
@@ -133,7 +134,7 @@ def start_scheduler(request):
         logs_dir = os.path.dirname(log_file)
         os.makedirs(logs_dir, exist_ok=True)
 
-        # Use the same Python executable that's running this Django app
+        # Use the same Python executable running this Django app
         python_executable = sys.executable
 
         subprocess.Popen(
@@ -213,7 +214,7 @@ def restart_scheduler(request):
     if request.method != 'POST':
         return redirect('scheduler_status')
 
-    # Check if user has manager or admin role
+    # Check if a user has a manager or admin role
     try:
         profile = request.user.profile
         if not profile.is_manager:

@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 import logging
 from pathlib import Path
 import sys
+from django.utils import timezone
 
 # Get the absolute path to the project directory
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -84,7 +85,7 @@ def cleanup_old_backups():
         backup_files = list(Path(backups_dir).glob("*.sql"))
 
         # Remove files older than retention_days
-        cutoff_date = datetime.now() - timedelta(days=retention_days)
+        cutoff_date = timezone.now() - timedelta(days=retention_days)
         old_files = []
 
         for file_path in backup_files:
@@ -199,7 +200,7 @@ def backup_database(record_id=None, force=False, reason=None):
     db_settings = settings.DATABASES['default']
 
     # Create backup filename with timestamp
-    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    timestamp = timezone.now().strftime('%Y%m%d_%H%M%S')
     backup_file = os.path.join(backups_dir, f"energy_data_{timestamp}.sql")
 
     try:

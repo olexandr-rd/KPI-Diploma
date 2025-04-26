@@ -4,8 +4,10 @@ from django.shortcuts import render, get_object_or_404
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.db.models import Q
+from django.utils import timezone
+from datetime import timedelta
 
-from ..models import EnergyLog, BackupLog, UserProfile
+from ..models import EnergyLog, BackupLog
 
 
 @login_required
@@ -122,8 +124,7 @@ def backups_list(request):
         backups = backups.filter(trigger_reason=reason)
 
     # Time filters
-    from datetime import datetime, timedelta
-    now = datetime.now()
+    now = timezone.now()
     if period == 'day':
         start_date = now - timedelta(days=1)
         backups = backups.filter(timestamp__gte=start_date)
