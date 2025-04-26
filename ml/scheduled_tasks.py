@@ -5,11 +5,9 @@ import django
 import logging
 import time
 import schedule
-# import subprocess
 import sys
 from datetime import datetime
 from pathlib import Path
-
 
 # Get the absolute path to the project directory
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -18,7 +16,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'Diploma.settings')
 django.setup()
 
-from monitoring.models import EnergyLog, BackupLog
+from monitoring.models import EnergyLog, BackupLog, SystemSettings
 
 # Create logs directory if it doesn't exist
 logs_dir = os.path.join(BASE_DIR, 'logs')
@@ -35,9 +33,20 @@ logging.basicConfig(
 )
 logger = logging.getLogger('scheduler')
 
-# Constants
-MAX_BACKUPS = 20
-MAX_ENERGY_LOGS = 5000
+
+def get_system_settings():
+    """Get or create system settings"""
+    try:
+        settings, created = SystemSettings.objects.get_or_create(pk=1)
+        return settings
+    except Exception as e:
+        logger.error(f"Error getting system settings: {str(e)}")
+        # Return default values
+        return type('obj', (object,), {
+            'backup_frequency_hours': 24,
+            'max_energy_logs': 5000,
+            'max_backups': 20,
+        })
 
 
 def run_data_simulation():
@@ -84,62 +93,56 @@ def run_data_simulation():
         logger.error(traceback.format_exc())
 
 
-def cleanup_old_backups():
-    """Keep only the most recent MAX_BACKUPS backup files"""
-    logger.info(f"Cleaning up old backups (keeping {MAX_BACKUPS} most recent)")
+def run_scheduled_backup():
+    """Run daily scheduled backup"""
+    logger.info("Running scheduled backup")
 
     try:
-        backup_dir = Path(os.path.join(BASE_DIR, "backups"))
+        from ml.backup_database import create_scheduled_backup
 
-        # Ensure the backup directory exists
-        if not backup_dir.exists():
-            logger.info("No backup directory found, nothing to clean")
-            return
-
-        # Get all .sql backup files
-        backup_files = list(backup_dir.glob("*.sql"))
-
-        # Sort by modification time (newest first)
-        backup_files.sort(key=lambda x: x.stat().st_mtime, reverse=True)
-
-        # If we have more than MAX_BACKUPS, delete the older ones
-        if len(backup_files) > MAX_BACKUPS:
-            files_to_delete = backup_files[MAX_BACKUPS:]
-            logger.info(f"Found {len(backup_files)} backups, deleting {len(files_to_delete)} old backups")
-
-            for file_path in files_to_delete:
-                try:
-                    # Delete the file
-                    file_path.unlink()
-                    logger.info(f"Deleted old backup: {file_path.name}")
-
-                    # Also delete the corresponding entry in the BackupLog if it exists
-                    BackupLog.objects.filter(backup_file=file_path.name).delete()
-
-                except Exception as e:
-                    logger.error(f"Failed to delete backup {file_path}: {str(e)}")
+        backup_performed = create_scheduled_backup()
+        if backup_performed:
+            logger.info("Scheduled backup completed successfully")
         else:
-            logger.info(f"Found {len(backup_files)} backups, no cleanup needed")
+            logger.error("Scheduled backup failed")
+
+    except Exception as e:
+        logger.error(f"Exception during scheduled backup: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
+
+
+def cleanup_old_backups():
+    """Keep only the most recent backups according to settings"""
+    logger.info("Cleaning up old backups")
+
+    try:
+        from ml.backup_database import cleanup_old_backups
+        cleanup_old_backups()
+        logger.info("Backup cleanup completed")
 
     except Exception as e:
         logger.error(f"Exception during backup cleanup: {str(e)}")
 
 
 def purge_old_energy_logs():
-    """Limit energy logs to MAX_ENERGY_LOGS most recent records"""
-    logger.info(f"Purging old energy logs (keeping {MAX_ENERGY_LOGS} most recent)")
+    """Limit energy logs according to settings"""
+    settings = get_system_settings()
+    max_logs = settings.max_energy_logs
+
+    logger.info(f"Purging old energy logs (keeping {max_logs} most recent)")
 
     try:
         # Count total logs
         total_logs = EnergyLog.objects.count()
 
-        if total_logs > MAX_ENERGY_LOGS:
+        if total_logs > max_logs:
             # Calculate how many to delete
-            logs_to_delete = total_logs - MAX_ENERGY_LOGS
+            logs_to_delete = total_logs - max_logs
             logger.info(f"Found {total_logs} logs, need to delete {logs_to_delete} old records")
 
             # Get the timestamp of the oldest log to keep
-            oldest_to_keep = EnergyLog.objects.order_by('-timestamp')[MAX_ENERGY_LOGS - 1:MAX_ENERGY_LOGS].first()
+            oldest_to_keep = EnergyLog.objects.order_by('-timestamp')[max_logs - 1:max_logs].first()
             if oldest_to_keep:
                 # Delete older logs
                 deleted_count = EnergyLog.objects.filter(timestamp__lt=oldest_to_keep.timestamp).delete()[0]
@@ -163,6 +166,9 @@ def start_scheduler():
     logger.info(f"Python executable: {sys.executable}")
     logger.info(f"BASE_DIR: {BASE_DIR}")
 
+    # Load system settings
+    settings = get_system_settings()
+
     # Clear any existing jobs (to prevent duplicates)
     schedule.clear()
     logger.info("Cleared existing scheduled jobs")
@@ -178,6 +184,14 @@ def start_scheduler():
     # Schedule data simulation every 15 minutes
     logger.info("Scheduling data simulation every 15 minutes")
     schedule.every(15).minutes.do(run_data_simulation)
+
+    # Schedule daily backup (based on settings)
+    backup_hours = settings.backup_frequency_hours
+    if backup_hours <= 0:
+        backup_hours = 24  # Default to daily if invalid
+
+    logger.info(f"Scheduling backup every {backup_hours} hours")
+    schedule.every(backup_hours).hours.do(run_scheduled_backup)
 
     # Schedule maintenance tasks once a day (at midnight)
     logger.info("Scheduling daily maintenance at midnight")
@@ -214,6 +228,12 @@ def start_scheduler():
                     logger.info(f"- Job {job.job_func.__name__} will run in {time_until:.1f} minutes")
                 else:
                     logger.info(f"- Job {job.job_func.__name__} has no next run time")
+
+            # Check if we need to reload settings (once per hour)
+            if datetime.now().minute < 5:
+                settings = get_system_settings()
+                logger.info(
+                    f"Reloaded system settings: backup_frequency={settings.backup_frequency_hours}h, max_logs={settings.max_energy_logs}")
 
 
 if __name__ == "__main__":

@@ -1,0 +1,544 @@
+<!-- monitoring/templates/logs/logs_list.html -->
+{% extends 'base.html' %}
+
+{% block title %}Записи енергосистеми{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row mb-4">
+        <div class="col">
+            <h1 class="h3"><i class="bi bi-list-ul"></i> Записи енергосистеми</h1>
+            <p class="text-muted">Повний список записів з можливістю фільтрації</p>
+        </div>
+    </div>
+
+    <!-- Filters -->
+    <div class="card shadow-sm mb-4">
+        <div class="card-header bg-white py-3">
+            <h5 class="mb-0">Фільтри</h5>
+        </div>
+        <div class="card-body">
+            <form method="get" class="row g-3">
+                <div class="col-md-4">
+                    <label for="search" class="form-label">Пошук</label>
+                    <div class="input-group">
+                        <input type="text" class="form-control" id="search" name="q"
+                               placeholder="Пошук за причиною аномалії або користувачем"
+                               value="{{ search_query }}">
+                        <button class="btn btn-primary" type="submit">
+                            <i class="bi bi-search"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="col-md-2">
+                    <label for="anomaly" class="form-label">Аномалії</label>
+                    <select class="form-select" id="anomaly" name="anomaly">
+                        <option value="" {% if is_anomaly == '' %}selected{% endif %}>Всі</option>
+                        <option value="yes" {% if is_anomaly == 'yes' %}selected{% endif %}>Тільки аномалії</option>
+                        <option value="no" {% if is_anomaly == 'no' %}selected{% endif %}>Без аномалій</option>
+                    </select>
+                </div>
+
+                <div class="col-md-2">
+                    <label for="manual" class="form-label">Тип запису</label>
+                    <select class="form-select" id="manual" name="manual">
+                        <option value="" {% if is_manual == '' %}selected{% endif %}>Всі</option>
+                        <option value="yes" {% if is_manual == 'yes' %}selected{% endif %}>Ручні</option>
+                        <option value="no" {% if is_manual == 'no' %}selected{% endif %}>Автоматичні</option>
+                    </select>
+                </div>
+
+                <div class="col-md-2">
+                    <label for="backup" class="form-label">Резервна копія</label>
+                    <select class="form-select" id="backup" name="backup">
+                        <option value="" {% if has_backup == '' %}selected{% endif %}>Всі</option>
+                        <option value="yes" {% if has_backup == 'yes' %}selected{% endif %}>З резервною копією</option>
+                        <option value="no" {% if has_backup == 'no' %}selected{% endif %}>Без резервної копії</option>
+                    </select>
+                </div>
+
+                <div class="col-md-2 d-flex align-items-end">
+                    <div class="d-grid w-100">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-funnel"></i> Застосувати фільтри
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Summary Cards -->
+    <div class="row g-3 mb-4">
+        <div class="col-md-3">
+            <div class="card text-bg-light">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <div class="text-muted small">Всього записів</div>
+                            <div class="h3">{{ total_logs }}</div>
+                        </div>
+                        <div class="fs-1 text-muted opacity-25">
+                            <i class="bi bi-database"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3">
+            <div class="card text-bg-danger text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <div class="text-white-50 small">Аномалії</div>
+                            <div class="h3">{{ total_anomalies }}</div>
+                        </div>
+                        <div class="fs-1 text-white opacity-25">
+                            <i class="bi bi-exclamation-triangle"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3">
+            <div class="card text-bg-info text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <div class="text-white-50 small">Ручні записи</div>
+                            <div class="h3">{{ total_manual }}</div>
+                        </div>
+                        <div class="fs-1 text-white opacity-25">
+                            <i class="bi bi-person"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3">
+            <div class="card text-bg-primary text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between">
+                        <div>
+                            <div class="text-white-50 small">З резервною копією</div>
+                            <div class="h3">{{ total_with_backup }}</div>
+                        </div>
+                        <div class="fs-1 text-white opacity-25">
+                            <i class="bi bi-cloud-check"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Logs Table -->
+    <div class="card shadow-sm">
+        <div class="card-header bg-white py-3">
+            <h5 class="mb-0">Результати</h5>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover table-sm mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>ID</th>
+                            <th>Час</th>
+                            <th>Навантаження (Вт)</th>
+                            <th>Прогнозоване (Вт)</th>
+                            <th>Тип</th>
+                            <th>Аномалія</th>
+                            <th>Пояснення</th>
+                            <th>Резервна копія</th>
+                            <th>Дії</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for log in page_obj %}
+                        <tr class="{% if log.is_anomaly %}anomaly{% endif %}">
+                            <td>{{ log.id }}</td>
+                            <td>{{ log.timestamp|date:"d.m.Y H:i:s" }}</td>
+                            <td>{{ log.load_power|floatformat:2 }}</td>
+                            <td>{{ log.predicted_load|default:"-"|floatformat:2 }}</td>
+                            <td>
+                                {% if log.is_manual %}
+                                    <span class="badge bg-info text-white"><i class="bi bi-person"></i> Ручний</span>
+                                {% else %}
+                                    <span class="badge bg-secondary text-white"><i class="bi bi-robot"></i> Авто</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if log.is_anomaly %}
+                                    <span class="badge bg-danger">Так</span>
+                                {% else %}
+                                    <span class="badge bg-success">Ні</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if log.is_anomaly %}
+                                    {% if log.anomaly_reason %}
+                                        <span class="text-danger">{{ log.anomaly_reason|truncatechars:50 }}</span>
+                                    {% else %}
+                                        <span class="text-danger">{{ log.get_anomaly_description }}</span>
+                                    {% endif %}
+                                {% elif log.anomaly_score %}
+                                    {{ log.anomaly_score|floatformat:2 }}
+                                {% else %}
+                                    -
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if log.backup_triggered %}
+                                    <span class="badge bg-primary"><i class="bi bi-check-circle"></i> Так</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">Ні</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <a href="{% url 'log_detail' log.id %}" class="btn btn-sm btn-outline-primary">
+                                    <i class="bi bi-eye"></i>
+                                </a>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="9" class="text-center py-4">Записів не знайдено</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Pagination -->
+        {% if page_obj.has_other_pages %}
+        <div class="card-footer bg-white d-flex justify-content-between align-items-center">
+            <div class="small text-muted">
+                Показано {{ page_obj.start_index }}-{{ page_obj.end_index }} із {{ page_obj.paginator.count }} записів
+            </div>
+            <nav aria-label="Page navigation">
+                <ul class="pagination pagination-sm mb-0">
+                    {% if page_obj.has_previous %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page=1{% if search_query %}&q={{ search_query }}{% endif %}{% if is_anomaly %}&anomaly={{ is_anomaly }}{% endif %}{% if is_manual %}&manual={{ is_manual }}{% endif %}{% if has_backup %}&backup={{ has_backup }}{% endif %}" aria-label="First">
+                            <span aria-hidden="true">&laquo;&laquo;</span>
+                        </a>
+                    </li>
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if search_query %}&q={{ search_query }}{% endif %}{% if is_anomaly %}&anomaly={{ is_anomaly }}{% endif %}{% if is_manual %}&manual={{ is_manual }}{% endif %}{% if has_backup %}&backup={{ has_backup }}{% endif %}" aria-label="Previous">
+                            <span aria-hidden="true">&laquo;</span>
+                        </a>
+                    </li>
+                    {% else %}
+                    <li class="page-item disabled">
+                        <a class="page-link" href="#" aria-label="First">
+                            <span aria-hidden="true">&laquo;&laquo;</span>
+                        </a>
+                    </li>
+                    <li class="page-item disabled">
+                        <a class="page-link" href="#" aria-label="Previous">
+                            <span aria-hidden="true">&laquo;</span>
+                        </a>
+                    </li>
+                    {% endif %}
+
+                    {% for i in page_obj.paginator.page_range %}
+                        {% if page_obj.number == i %}
+                            <li class="page-item active"><a class="page-link" href="#">{{ i }}</a></li>
+                        {% elif i > page_obj.number|add:"-3" and i < page_obj.number|add:"3" %}
+                            <li class="page-item">
+                                <a class="page-link" href="?page={{ i }}{% if search_query %}&q={{ search_query }}{% endif %}{% if is_anomaly %}&anomaly={{ is_anomaly }}{% endif %}{% if is_manual %}&manual={{ is_manual }}{% endif %}{% if has_backup %}&backup={{ has_backup }}{% endif %}">{{ i }}</a>
+                            </li>
+                        {% endif %}
+                    {% endfor %}
+
+                    {% if page_obj.has_next %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ page_obj.next_page_number }}{% if search_query %}&q={{ search_query }}{% endif %}{% if is_anomaly %}&anomaly={{ is_anomaly }}{% endif %}{% if is_manual %}&manual={{ is_manual }}{% endif %}{% if has_backup %}&backup={{ has_backup }}{% endif %}" aria-label="Next">
+                            <span aria-hidden="true">&raquo;</span>
+                        </a>
+                    </li>
+                    <li class="page-item">
+                        <a class="page-link" href="?page={{ page_obj.paginator.num_pages }}{% if search_query %}&q={{ search_query }}{% endif %}{% if is_anomaly %}&anomaly={{ is_anomaly }}{% endif %}{% if is_manual %}&manual={{ is_manual }}{% endif %}{% if has_backup %}&backup={{ has_backup }}{% endif %}" aria-label="Last">
+                            <span aria-hidden="true">&raquo;&raquo;</span>
+                        </a>
+                    </li>
+                    {% else %}
+                    <li class="page-item disabled">
+                        <a class="page-link" href="#" aria-label="Next">
+                            <span aria-hidden="true">&raquo;</span>
+                        </a>
+                    </li>
+                    <li class="page-item disabled">
+                        <a class="page-link" href="#" aria-label="Last">
+                            <span aria-hidden="true">&raquo;&raquo;</span>
+                        </a>
+                    </li>
+                    {% endif %}
+                </ul>
+            </nav>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+<!-- monitoring/templates/logs/log_detail.html -->
+{% extends 'base.html' %}
+
+{% block title %}Деталі запису #{{ log.id }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row mb-4">
+        <div class="col">
+            <div class="d-flex align-items-center">
+                <h1 class="h3 mb-0"><i class="bi bi-clipboard-data"></i> Запис #{{ log.id }}</h1>
+                <div class="ms-auto">
+                    <a href="{% url 'logs_list' %}" class="btn btn-outline-secondary">
+                        <i class="bi bi-arrow-left"></i> До списку
+                    </a>
+                </div>
+            </div>
+            <p class="text-muted">Деталі запису від {{ log.timestamp|date:"d.m.Y H:i:s" }}</p>
+        </div>
+    </div>
+
+    <!-- Navigation -->
+    <div class="row mb-4">
+        <div class="col">
+            <div class="d-flex justify-content-between">
+                {% if prev_log %}
+                <a href="{% url 'log_detail' prev_log.id %}" class="btn btn-sm btn-outline-primary">
+                    <i class="bi bi-chevron-left"></i> Попередній запис
+                </a>
+                {% else %}
+                <div></div>
+                {% endif %}
+
+                {% if next_log %}
+                <a href="{% url 'log_detail' next_log.id %}" class="btn btn-sm btn-outline-primary">
+                    Наступний запис <i class="bi bi-chevron-right"></i>
+                </a>
+                {% else %}
+                <div></div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Data -->
+    <div class="row mb-4">
+        <!-- Left Column - Basic Info -->
+        <div class="col-md-6">
+            <div class="card shadow-sm h-100">
+                <div class="card-header bg-white">
+                    <h5 class="card-title mb-0">Основна інформація</h5>
+                </div>
+                <div class="card-body">
+                    <table class="table table-sm">
+                        <tr>
+                            <th style="width: 35%">ID запису:</th>
+                            <td>{{ log.id }}</td>
+                        </tr>
+                        <tr>
+                            <th>Час створення:</th>
+                            <td>{{ log.timestamp|date:"d.m.Y H:i:s" }}</td>
+                        </tr>
+                        <tr>
+                            <th>Тип запису:</th>
+                            <td>
+                                {% if log.is_manual %}
+                                    <span class="badge bg-info"><i class="bi bi-person"></i> Ручний запис</span>
+                                {% else %}
+                                    <span class="badge bg-secondary"><i class="bi bi-robot"></i> Автоматичний запис</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        <tr>
+                            <th>Створено користувачем:</th>
+                            <td>
+                                {% if log.created_by %}
+                                    {{ log.created_by.get_full_name|default:log.created_by.username }}
+                                {% else %}
+                                    <span class="text-muted">Система</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        <tr>
+                            <th>Статус аномалії:</th>
+                            <td>
+                                {% if log.is_anomaly %}
+                                    <span class="badge bg-danger"><i class="bi bi-exclamation-triangle"></i> Виявлено аномалію</span>
+                                {% else %}
+                                    <span class="badge bg-success"><i class="bi bi-check-circle"></i> Нормальний</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% if log.is_anomaly %}
+                        <tr>
+                            <th>Причина аномалії:</th>
+                            <td class="text-danger">
+                                {% if log.anomaly_reason %}
+                                    {{ log.anomaly_reason }}
+                                {% else %}
+                                    {{ log.get_anomaly_description }}
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endif %}
+                        <tr>
+                            <th>Оцінка аномалії:</th>
+                            <td>
+                                {% if log.anomaly_score %}
+                                    {{ log.anomaly_score|floatformat:4 }}
+                                    <span class="text-muted ms-2">({{ log.get_anomaly_description }})</span>
+                                {% else %}
+                                    <span class="text-muted">Не визначено</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        <tr>
+                            <th>Резервна копія:</th>
+                            <td>
+                                {% if log.backup_triggered %}
+                                    <span class="badge bg-primary"><i class="bi bi-check-circle"></i> Створено</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">Не створено</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Column - Measurements -->
+        <div class="col-md-6">
+            <div class="card shadow-sm h-100">
+                <div class="card-header bg-white">
+                    <h5 class="card-title mb-0">Виміри енергосистеми</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row mb-4">
+                        <div class="col-sm-6">
+                            <div class="card bg-light">
+                                <div class="card-body p-3">
+                                    <h6 class="card-title">Навантаження</h6>
+                                    <p class="h4 mb-0">{{ log.load_power|floatformat:2 }} <small>Вт</small></p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-sm-6">
+                            <div class="card bg-light">
+                                <div class="card-body p-3">
+                                    <h6 class="card-title">Прогнозоване навантаження</h6>
+                                    <p class="h4 mb-0">{{ log.predicted_load|default:"—"|floatformat:2 }} <small>Вт</small></p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <table class="table table-sm">
+                        <tr>
+                            <th style="width: 35%">Вихідна напруга:</th>
+                            <td>{{ log.ac_output_voltage|floatformat:2 }} В</td>
+                        </tr>
+                        <tr>
+                            <th>Напруга батареї:</th>
+                            <td>{{ log.dc_battery_voltage|floatformat:2 }} В</td>
+                        </tr>
+                        <tr>
+                            <th>Струм батареї:</th>
+                            <td>{{ log.dc_battery_current|floatformat:2 }} А</td>
+                        </tr>
+                        <tr>
+                            <th>Температура:</th>
+                            <td>
+                                {% if log.temperature %}
+                                    {{ log.temperature|floatformat:1 }} °C
+                                {% else %}
+                                    <span class="text-muted">Не виміряно</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Related Backups -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card shadow-sm">
+                <div class="card-header bg-white">
+                    <h5 class="card-title mb-0">Пов'язані резервні копії</h5>
+                </div>
+                <div class="card-body p-0">
+                    {% if backups %}
+                    <div class="table-responsive">
+                        <table class="table table-hover table-sm mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Час</th>
+                                    <th>Файл</th>
+                                    <th>Розмір</th>
+                                    <th>Статус</th>
+                                    <th>Причина</th>
+                                    <th>Користувач</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for backup in backups %}
+                                <tr class="{% if backup.status == 'SUCCESS' %}success{% elif backup.status == 'FAILED' %}failed{% endif %}">
+                                    <td>{{ backup.timestamp|date:"d.m.Y H:i:s" }}</td>
+                                    <td>{{ backup.backup_file }}</td>
+                                    <td>{{ backup.size_kb|floatformat:2 }} КБ</td>
+                                    <td>
+                                        {% if backup.status == 'SUCCESS' %}
+                                            <span class="badge bg-success"><i class="bi bi-check-circle"></i> Успішно</span>
+                                        {% elif backup.status == 'FAILED' %}
+                                            <span class="badge bg-danger"><i class="bi bi-x-circle"></i> Помилка</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if backup.trigger_reason == 'ANOMALY' %}
+                                            <span class="badge bg-danger">Аномалія</span>
+                                        {% elif backup.trigger_reason == 'PREDICTION' %}
+                                            <span class="badge bg-warning text-dark">Прогноз</span>
+                                        {% elif backup.trigger_reason == 'MANUAL' %}
+                                            <span class="badge bg-info">Вручну</span>
+                                        {% elif backup.trigger_reason == 'SCHEDULED' %}
+                                            <span class="badge bg-primary">За розкладом</span>
+                                        {% else %}
+                                            <span class="badge bg-secondary">{{ backup.trigger_reason }}</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if backup.created_by %}
+                                            {{ backup.created_by.get_full_name|default:backup.created_by.username }}
+                                        {% else %}
+                                            <span class="text-muted">Система</span>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="text-center py-4">
+                        <p class="text-muted mb-0">Немає пов'язаних резервних копій</p>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

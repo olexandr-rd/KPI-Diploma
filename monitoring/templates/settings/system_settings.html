@@ -1,0 +1,174 @@
+<!-- monitoring/templates/settings/system_settings.html -->
+{% extends 'base.html' %}
+
+{% block title %}Налаштування системи{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row mb-4">
+        <div class="col">
+            <h1 class="h3"><i class="bi bi-sliders"></i> Налаштування системи</h1>
+            <p class="text-muted">Налаштування моніторингу та резервного копіювання</p>
+        </div>
+    </div>
+
+    {% if messages %}
+        {% for message in messages %}
+            <div class="alert alert-{{ message.tags }} alert-dismissible fade show">
+                {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        {% endfor %}
+    {% endif %}
+
+    <div class="row">
+        <div class="col-lg-8">
+            <div class="card shadow-sm">
+                <div class="card-header bg-white py-3">
+                    <h5 class="mb-0">Параметри системи</h5>
+                </div>
+                <div class="card-body">
+                    <form method="post">
+                        {% csrf_token %}
+
+                        <h6 class="text-primary mb-3">Налаштування резервного копіювання</h6>
+
+                        <div class="row mb-3">
+                            <div class="col-md-4">
+                                <label for="{{ form.backup_frequency_hours.id_for_label }}" class="form-label">
+                                    Частота автоматичного резервування (годин)
+                                </label>
+                                {{ form.backup_frequency_hours }}
+                                {% if form.backup_frequency_hours.errors %}
+                                    <div class="text-danger small">{{ form.backup_frequency_hours.errors }}</div>
+                                {% endif %}
+                                <div class="form-text small text-muted">
+                                    Рекомендоване значення: 24 (щодня)
+                                </div>
+                            </div>
+
+                            <div class="col-md-4">
+                                <label for="{{ form.backup_retention_days.id_for_label }}" class="form-label">
+                                    Зберігати резервні копії (днів)
+                                </label>
+                                {{ form.backup_retention_days }}
+                                {% if form.backup_retention_days.errors %}
+                                    <div class="text-danger small">{{ form.backup_retention_days.errors }}</div>
+                                {% endif %}
+                                <div class="form-text small text-muted">
+                                    Період зберігання резервних копій
+                                </div>
+                            </div>
+
+                            <div class="col-md-4">
+                                <label for="{{ form.max_backups.id_for_label }}" class="form-label">
+                                    Максимальна кількість резервних копій
+                                </label>
+                                {{ form.max_backups }}
+                                {% if form.max_backups.errors %}
+                                    <div class="text-danger small">{{ form.max_backups.errors }}</div>
+                                {% endif %}
+                                <div class="form-text small text-muted">
+                                    Обмеження кількості файлів
+                                </div>
+                            </div>
+                        </div>
+
+                        <hr>
+                        <h6 class="text-primary mb-3">Порогові значення навантаження</h6>
+
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="{{ form.min_load_threshold.id_for_label }}" class="form-label">
+                                    Мінімальне допустиме навантаження (Вт)
+                                </label>
+                                {{ form.min_load_threshold }}
+                                {% if form.min_load_threshold.errors %}
+                                    <div class="text-danger small">{{ form.min_load_threshold.errors }}</div>
+                                {% endif %}
+                                <div class="form-text small text-muted">
+                                    Поріг для виявлення надто низького навантаження
+                                </div>
+                            </div>
+
+                            <div class="col-md-6">
+                                <label for="{{ form.max_load_threshold.id_for_label }}" class="form-label">
+                                    Максимальне допустиме навантаження (Вт)
+                                </label>
+                                {{ form.max_load_threshold }}
+                                {% if form.max_load_threshold.errors %}
+                                    <div class="text-danger small">{{ form.max_load_threshold.errors }}</div>
+                                {% endif %}
+                                <div class="form-text small text-muted">
+                                    Поріг для виявлення перевантаження
+                                </div>
+                            </div>
+                        </div>
+
+                        <hr>
+                        <h6 class="text-primary mb-3">Налаштування бази даних</h6>
+
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="{{ form.max_energy_logs.id_for_label }}" class="form-label">
+                                    Максимальна кількість записів енергосистеми
+                                </label>
+                                {{ form.max_energy_logs }}
+                                {% if form.max_energy_logs.errors %}
+                                    <div class="text-danger small">{{ form.max_energy_logs.errors }}</div>
+                                {% endif %}
+                                <div class="form-text small text-muted">
+                                    Обмеження кількості збережених записів (старі будуть видалені)
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mt-4 d-flex justify-content-between">
+                            <a href="{% url 'dashboard' %}" class="btn btn-secondary">
+                                <i class="bi bi-arrow-left"></i> Назад
+                            </a>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-save"></i> Зберегти налаштування
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-lg-4">
+            <div class="card shadow-sm">
+                <div class="card-header bg-white py-3">
+                    <h5 class="mb-0">Інформація про останні зміни</h5>
+                </div>
+                <div class="card-body">
+                    <p><strong>Остання зміна:</strong> {{ settings.last_modified|date:"d.m.Y H:i:s" }}</p>
+                    <p><strong>Змінено користувачем:</strong>
+                        {% if settings.modified_by %}
+                            {{ settings.modified_by.get_full_name|default:settings.modified_by.username }}
+                        {% else %}
+                            <span class="text-muted">Невідомо</span>
+                        {% endif %}
+                    </p>
+                </div>
+            </div>
+
+            <div class="card shadow-sm mt-4">
+                <div class="card-header bg-white py-3">
+                    <h5 class="mb-0">Довідка</h5>
+                </div>
+                <div class="card-body">
+                    <h6>Частота резервного копіювання</h6>
+                    <p class="small">Визначає, як часто система автоматично створює резервні копії. Рекомендоване значення - 24 години (щодня).</p>
+
+                    <h6>Період зберігання</h6>
+                    <p class="small">Усі резервні копії старше цього періоду будуть автоматично видалені.</p>
+
+                    <h6>Пороги навантаження</h6>
+                    <p class="small">Ці значення використовуються для виявлення аномальних прогнозів навантаження та створення резервних копій.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

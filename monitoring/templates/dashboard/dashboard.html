@@ -1,0 +1,198 @@
+<!-- monitoring/templates/dashboard/dashboard.html -->
+{% extends 'base.html' %}
+
+{% block title %}Панель моніторингу{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row mb-4">
+        <div class="col">
+            <h1 class="h3"><i class="bi bi-speedometer2"></i> Панель моніторингу</h1>
+            <p class="text-muted">Огляд стану енергосистеми та резервного копіювання</p>
+        </div>
+    </div>
+
+    <!-- Alert for scheduler status -->
+    {% if not stats.scheduler_active %}
+    <div class="alert alert-warning">
+        <i class="bi bi-exclamation-triangle-fill me-2"></i> <strong>Увага!</strong> Планувальник не запущено.
+        Автоматичний збір даних та резервне копіювання недоступні.
+        {% if user.profile.is_manager %}
+            <a href="{% url 'scheduler_status' %}" class="btn btn-sm btn-warning ms-3">Керувати планувальником</a>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    <!-- Stats Cards -->
+    <div class="row g-3 mb-4" id="stats-container" hx-get="{% url 'stats_partial' %}" hx-trigger="load, every 60s">
+        {% include 'dashboard/partials/stats.html' %}
+    </div>
+
+    <!-- Main Content -->
+    <div class="row g-4">
+        <!-- Latest Logs -->
+        <div class="col-lg-8">
+            <div class="card shadow-sm h-100">
+                <div class="card-header bg-white d-flex justify-content-between align-items-center py-3">
+                    <h5 class="mb-0">Останні записи енергосистеми</h5>
+                    <div>
+                        <a href="{% url 'logs_list' %}" class="btn btn-sm btn-outline-primary">
+                            <i class="bi bi-list-ul"></i> Усі записи
+                        </a>
+                        {% if user.profile.is_manager %}
+                        <button class="btn btn-sm btn-primary ms-2"
+                                hx-post="{% url 'run_simulation' %}"
+                                hx-target="#logs-container"
+                                hx-indicator="#logs-indicator">
+                            <i class="bi bi-lightning-charge"></i> Створити запис
+                            <span class="htmx-indicator spinner-border spinner-border-sm text-light" id="logs-indicator" role="status"></span>
+                        </button>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="card-body p-0" id="logs-container">
+                    {% include 'dashboard/partials/logs_table.html' %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent Anomalies -->
+        <div class="col-lg-4">
+            <div class="card shadow-sm h-100">
+                <div class="card-header bg-white d-flex justify-content-between align-items-center py-3">
+                    <h5 class="mb-0">Нещодавні аномалії</h5>
+                    <a href="{% url 'logs_list' %}?anomaly=yes" class="btn btn-sm btn-outline-danger">
+                        <i class="bi bi-exclamation-triangle"></i> Усі аномалії
+                    </a>
+                </div>
+                <div class="card-body p-0">
+                    {% if recent_anomalies %}
+                        <div class="list-group list-group-flush">
+                            {% for log in recent_anomalies %}
+                                <a href="{% url 'log_detail' log.id %}" class="list-group-item list-group-item-action">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <small class="text-muted">{{ log.timestamp|date:"d.m.Y H:i:s" }}</small>
+                                        <span class="badge bg-danger">{{ log.get_anomaly_description }}</span>
+                                    </div>
+                                    <div class="mt-1">
+                                        <span class="text-danger"><i class="bi bi-exclamation-triangle-fill me-1"></i></span>
+                                        {% if log.anomaly_reason %}
+                                            {{ log.anomaly_reason }}
+                                        {% else %}
+                                            Виявлено аномалію
+                                        {% endif %}
+                                    </div>
+                                    <div class="small mt-1">
+                                        <strong>Навантаження:</strong> {{ log.load_power|floatformat:2 }} Вт
+                                        {% if log.is_manual %}
+                                            <span class="badge bg-info ms-2">Ручний запис</span>
+                                        {% endif %}
+                                    </div>
+                                </a>
+                            {% endfor %}
+                        </div>
+                    {% else %}
+                        <div class="text-center py-5 text-muted">
+                            <i class="bi bi-check-circle display-4"></i>
+                            <p class="mt-3">Аномалій не виявлено</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Backup Section -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card shadow-sm">
+                <div class="card-header bg-white d-flex justify-content-between align-items-center py-3">
+                    <h5 class="mb-0">Останні резервні копії</h5>
+                    <div>
+                        <a href="{% url 'backups_list' %}" class="btn btn-sm btn-outline-primary">
+                            <i class="bi bi-server"></i> Усі резервні копії
+                        </a>
+                        {% if user.profile.is_manager %}
+                        <button class="btn btn-sm btn-primary ms-2"
+                                hx-post="{% url 'force_backup' %}"
+                                hx-target="#backups-container"
+                                hx-indicator="#backups-indicator">
+                            <i class="bi bi-cloud-arrow-up"></i> Створити резервну копію
+                            <span class="htmx-indicator spinner-border spinner-border-sm text-light" id="backups-indicator" role="status"></span>
+                        </button>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="card-body p-0" id="backups-container">
+                    {% include 'dashboard/partials/backups_table.html' %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Load Trend -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card shadow-sm">
+                <div class="card-header bg-white d-flex justify-content-between align-items-center py-3">
+                    <h5 class="mb-0">Тенденції навантаження</h5>
+                    <a href="{% url 'analytics' %}" class="btn btn-sm btn-outline-primary">
+                        <i class="bi bi-graph-up"></i> Детальна аналітика
+                    </a>
+                </div>
+                <div class="card-body">
+                    <canvas id="loadTrendChart" height="200"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Load trend chart
+        fetch('{% url "load_trend_chart" %}?period=week')
+            .then(response => response.json())
+            .then(data => {
+                const ctx = document.getElementById('loadTrendChart').getContext('2d');
+                new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: data.labels,
+                        datasets: data.datasets
+                    },
+                    options: {
+                        responsive: true,
+                        plugins: {
+                            title: {
+                                display: true,
+                                text: 'Тенденції навантаження за останній тиждень'
+                            },
+                            legend: {
+                                position: 'top',
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                title: {
+                                    display: true,
+                                    text: 'Навантаження (Вт)'
+                                }
+                            },
+                            x: {
+                                title: {
+                                    display: true,
+                                    text: 'Дата'
+                                }
+                            }
+                        }
+                    }
+                });
+            })
+            .catch(error => console.error('Error loading chart data:', error));
+    });
+</script>
+{% endblock %}

@@ -1,0 +1,273 @@
+<!-- monitoring/templates/dashboard/partials/stats.html -->
+<div class="col-md-4 col-lg-3">
+    <div class="card shadow-sm stat-card border-primary-left">
+        <div class="card-body p-3">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <div class="text-muted small">Записи енергосистеми</div>
+                    <div class="stat-value">{{ stats.total_logs }}</div>
+                </div>
+                <div class="fs-1 text-primary opacity-25">
+                    <i class="bi bi-database"></i>
+                </div>
+            </div>
+            <div class="mt-2 small">
+                <span class="text-info"><i class="bi bi-info-circle"></i> {{ stats.manual_count }} ручних, {{ stats.auto_count }} автоматичних</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="col-md-4 col-lg-3">
+    <div class="card shadow-sm stat-card border-danger-left">
+        <div class="card-body p-3">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <div class="text-muted small">Виявлені аномалії</div>
+                    <div class="stat-value">{{ stats.anomaly_count }}</div>
+                </div>
+                <div class="fs-1 text-danger opacity-25">
+                    <i class="bi bi-exclamation-triangle"></i>
+                </div>
+            </div>
+            <div class="mt-2 small">
+                <span class="text-danger"><i class="bi bi-percent"></i> {{ stats.anomaly_count|default:0|floatformat:2 }}% від усіх записів</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="col-md-4 col-lg-3">
+    <div class="card shadow-sm stat-card border-success-left">
+        <div class="card-body p-3">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <div class="text-muted small">Резервні копії</div>
+                    <div class="stat-value">{{ stats.backup_success }}</div>
+                </div>
+                <div class="fs-1 text-success opacity-25">
+                    <i class="bi bi-cloud-check"></i>
+                </div>
+            </div>
+            <div class="mt-2 small">
+                <span class="text-danger"><i class="bi bi-x-circle"></i> {{ stats.backup_failed }} невдалих</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="col-md-4 col-lg-3">
+    <div class="card shadow-sm stat-card border-info-left">
+        <div class="card-body p-3">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <div class="text-muted small">Використано пам'яті</div>
+                    <div class="stat-value">{{ stats.storage_used|floatformat:2 }} МБ</div>
+                </div>
+                <div class="fs-1 text-info opacity-25">
+                    <i class="bi bi-hdd"></i>
+                </div>
+            </div>
+            <div class="mt-2 small">
+                <span class="text-primary"><i class="bi bi-clock"></i> {{ stats.retention_days }} днів зберігання</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="col-md-4 col-lg-4">
+    <div class="card shadow-sm">
+        <div class="card-body p-3">
+            <h6 class="card-title"><i class="bi bi-calendar-event"></i> Розклад</h6>
+            <ul class="list-group list-group-flush small">
+                <li class="list-group-item d-flex justify-content-between align-items-center px-0">
+                    <span><i class="bi bi-clock text-info"></i> Наступний збір даних</span>
+                    <span class="badge bg-info">{{ stats.next_data_collection|date:"H:i:s, d.m.Y" }}</span>
+                </li>
+                <li class="list-group-item d-flex justify-content-between align-items-center px-0">
+                    <span><i class="bi bi-cloud-arrow-up text-primary"></i> Наступне резервування</span>
+                    <span class="badge bg-primary">{{ stats.next_backup|date:"H:i:s, d.m.Y" }}</span>
+                </li>
+                <li class="list-group-item d-flex justify-content-between align-items-center px-0">
+                    <span><i class="bi bi-gear text-secondary"></i> Наступне обслуговування</span>
+                    <span class="badge bg-secondary">{{ stats.next_maintenance|date:"H:i:s, d.m.Y" }}</span>
+                </li>
+            </ul>
+        </div>
+    </div>
+</div>
+
+<div class="col-md-4 col-lg-4">
+    <div class="card shadow-sm">
+        <div class="card-body p-3">
+            <h6 class="card-title"><i class="bi bi-sliders"></i> Параметри системи</h6>
+            <ul class="list-group list-group-flush small">
+                <li class="list-group-item d-flex justify-content-between align-items-center px-0">
+                    <span><i class="bi bi-clock-history text-primary"></i> Частота резервування</span>
+                    <span class="badge bg-primary">{{ stats.backup_frequency_hours }} годин</span>
+                </li>
+                <li class="list-group-item d-flex justify-content-between align-items-center px-0">
+                    <span><i class="bi bi-archive text-success"></i> Максимум записів</span>
+                    <span class="badge bg-success">{{ stats.max_logs_kept }}</span>
+                </li>
+                <li class="list-group-item d-flex justify-content-between align-items-center px-0">
+                    <span><i class="bi bi-server text-info"></i> Максимум резервних копій</span>
+                    <span class="badge bg-info">{{ stats.max_backups_kept }}</span>
+                </li>
+            </ul>
+        </div>
+    </div>
+</div>
+
+<div class="col-md-4 col-lg-4">
+    <div class="card shadow-sm {% if stats.scheduler_active %}bg-success bg-opacity-10{% else %}bg-danger bg-opacity-10{% endif %}">
+        <div class="card-body p-3">
+            <h6 class="card-title"><i class="bi bi-activity"></i> Стан системи</h6>
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <span class="text-muted">Статус планувальника</span>
+                {% if stats.scheduler_active %}
+                    <span class="badge bg-success">{{ stats.scheduler_status }}</span>
+                {% else %}
+                    <span class="badge bg-danger">{{ stats.scheduler_status }}</span>
+                {% endif %}
+            </div>
+            <div class="progress mb-2" style="height: 8px;">
+                <div class="progress-bar {% if stats.scheduler_active %}bg-success{% else %}bg-danger{% endif %}"
+                    role="progressbar" style="width: 100%;"
+                    aria-valuenow="100" aria-valuemin="0" aria-valuemax="100"></div>
+            </div>
+            <div class="small text-muted">
+                <i class="bi bi-info-circle"></i> Остання перевірка: {{ stats.last_scheduler_check|timesince }} тому
+            </div>
+            {% if user.profile.is_manager %}
+                <div class="mt-2">
+                    <a href="{% url 'scheduler_status' %}" class="btn btn-sm btn-outline-primary w-100">
+                        <i class="bi bi-gear"></i> Керувати планувальником
+                    </a>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- monitoring/templates/dashboard/partials/logs_table.html -->
+<div class="table-responsive">
+    <table class="table table-hover table-sm mb-0">
+        <thead class="table-light">
+            <tr>
+                <th>Час</th>
+                <th>Навантаження (Вт)</th>
+                <th>Прогнозоване (Вт)</th>
+                <th>Тип</th>
+                <th>Аномалія</th>
+                <th>Оцінка</th>
+                <th>Резервна копія</th>
+                <th>Дії</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for log in logs %}
+            <tr class="{% if log.is_anomaly %}anomaly{% endif %}">
+                <td>{{ log.timestamp|date:"d.m.Y H:i:s" }}</td>
+                <td>{{ log.load_power|floatformat:2 }}</td>
+                <td>{{ log.predicted_load|default:"-"|floatformat:2 }}</td>
+                <td>
+                    {% if log.is_manual %}
+                        <span class="badge bg-info text-white"><i class="bi bi-person"></i> Ручний</span>
+                    {% else %}
+                        <span class="badge bg-secondary text-white"><i class="bi bi-robot"></i> Авто</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if log.is_anomaly %}
+                        <span class="badge bg-danger">Так</span>
+                    {% else %}
+                        <span class="badge bg-success">Ні</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if log.is_anomaly %}
+                        <span class="text-danger">{{ log.get_anomaly_description }}</span>
+                    {% elif log.anomaly_score %}
+                        {{ log.anomaly_score|floatformat:2 }}
+                    {% else %}
+                        -
+                    {% endif %}
+                </td>
+                <td>
+                    {% if log.backup_triggered %}
+                        <span class="badge bg-primary"><i class="bi bi-check-circle"></i> Так</span>
+                    {% else %}
+                        <span class="badge bg-secondary">Ні</span>
+                    {% endif %}
+                </td>
+                <td>
+                    <a href="{% url 'log_detail' log.id %}" class="btn btn-sm btn-outline-primary">
+                        <i class="bi bi-eye"></i>
+                    </a>
+                </td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="8" class="text-center py-4">Записів не знайдено</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<!-- monitoring/templates/dashboard/partials/backups_table.html -->
+<div class="table-responsive">
+    <table class="table table-hover table-sm mb-0">
+        <thead class="table-light">
+            <tr>
+                <th>Час</th>
+                <th>Файл</th>
+                <th>Розмір</th>
+                <th>Статус</th>
+                <th>Причина</th>
+                <th>Користувач</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for backup in backups %}
+            <tr class="{% if backup.status == 'SUCCESS' %}success{% elif backup.status == 'FAILED' %}failed{% endif %}">
+                <td>{{ backup.timestamp|date:"d.m.Y H:i:s" }}</td>
+                <td>{{ backup.backup_file }}</td>
+                <td>{{ backup.size_kb|floatformat:2 }} КБ</td>
+                <td>
+                    {% if backup.status == 'SUCCESS' %}
+                        <span class="badge bg-success"><i class="bi bi-check-circle"></i> Успішно</span>
+                    {% elif backup.status == 'FAILED' %}
+                        <span class="badge bg-danger"><i class="bi bi-x-circle"></i> Помилка</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if backup.trigger_reason == 'ANOMALY' %}
+                        <span class="badge bg-danger"><i class="bi bi-exclamation-triangle"></i> Аномалія</span>
+                    {% elif backup.trigger_reason == 'PREDICTION' %}
+                        <span class="badge bg-warning text-dark"><i class="bi bi-graph-up"></i> Прогноз</span>
+                    {% elif backup.trigger_reason == 'MANUAL' %}
+                        <span class="badge bg-info"><i class="bi bi-person"></i> Вручну</span>
+                    {% elif backup.trigger_reason == 'SCHEDULED' %}
+                        <span class="badge bg-primary"><i class="bi bi-calendar"></i> За розкладом</span>
+                    {% else %}
+                        <span class="badge bg-secondary">{{ backup.trigger_reason }}</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if backup.created_by %}
+                        {{ backup.created_by.get_full_name|default:backup.created_by.username }}
+                    {% else %}
+                        <span class="text-muted">Система</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="6" class="text-center py-4">Резервних копій не знайдено</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>

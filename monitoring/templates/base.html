@@ -1,0 +1,319 @@
+<!-- monitoring/templates/base.html -->
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Система моніторингу енергії{% endblock %}</title>
+
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+
+    <!-- Bootstrap Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <!-- HTMX for dynamic content -->
+    <script src="https://unpkg.com/htmx.org@1.9.9"></script>
+
+    <!-- Custom CSS -->
+    <style>
+        .sidebar {
+            min-height: 100vh;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .sidebar .nav-link {
+            color: #333;
+            padding: 0.5rem 1rem;
+            border-radius: 0.25rem;
+            margin-bottom: 0.25rem;
+        }
+
+        .sidebar .nav-link:hover {
+            background-color: #f8f9fa;
+        }
+
+        .sidebar .nav-link.active {
+            background-color: #0d6efd;
+            color: white;
+        }
+
+        .sidebar .nav-link i {
+            margin-right: 0.5rem;
+        }
+
+        .dropdown-menu {
+            min-width: 12rem;
+        }
+
+        .navbar-brand {
+            font-weight: bold;
+        }
+
+        .footer {
+            padding: 1rem 0;
+            background-color: #f8f9fa;
+            text-align: center;
+            margin-top: 2rem;
+        }
+
+        /* Table styling */
+        .table-sm {
+            font-size: 0.875rem;
+        }
+
+        /* Stats cards */
+        .stat-card {
+            border-left: 4px solid;
+            transition: transform 0.2s;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-5px);
+        }
+
+        .stat-card .stat-value {
+            font-size: 1.75rem;
+            font-weight: 500;
+        }
+
+        /* Color classes for stat cards */
+        .border-primary-left {
+            border-left-color: #0d6efd;
+        }
+
+        .border-success-left {
+            border-left-color: #198754;
+        }
+
+        .border-warning-left {
+            border-left-color: #ffc107;
+        }
+
+        .border-danger-left {
+            border-left-color: #dc3545;
+        }
+
+        .border-info-left {
+            border-left-color: #0dcaf0;
+        }
+
+        /* Anomaly indicators */
+        tr.anomaly {
+            background-color: rgba(220, 53, 69, 0.1) !important;
+        }
+
+        tr.success {
+            background-color: rgba(25, 135, 84, 0.1) !important;
+        }
+
+        tr.failed {
+            background-color: rgba(220, 53, 69, 0.1) !important;
+        }
+    </style>
+
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    <!-- Top Navbar -->
+    <nav class="navbar navbar-expand-md navbar-dark bg-primary sticky-top">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="{% url 'dashboard' %}">
+                <i class="bi bi-lightning-charge-fill"></i> Моніторинг Енергії
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarSupportedContent">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarSupportedContent">
+                <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+                    {% if user.is_authenticated %}
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}"
+                           href="{% url 'dashboard' %}">
+                            <i class="bi bi-speedometer2"></i> Панель
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.resolver_match.url_name == 'logs_list' %}active{% endif %}"
+                           href="{% url 'logs_list' %}">
+                            <i class="bi bi-list-ul"></i> Записи
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.resolver_match.url_name == 'backups_list' %}active{% endif %}"
+                           href="{% url 'backups_list' %}">
+                            <i class="bi bi-server"></i> Резервні копії
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link {% if request.resolver_match.url_name == 'analytics' %}active{% endif %}"
+                           href="{% url 'analytics' %}">
+                            <i class="bi bi-graph-up"></i> Аналітика
+                        </a>
+                    </li>
+                    {% endif %}
+                </ul>
+
+                <ul class="navbar-nav ms-auto">
+                    {% if user.is_authenticated %}
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button"
+                           data-bs-toggle="dropdown" aria-expanded="false">
+                            <i class="bi bi-person-circle"></i> {% if user.get_full_name %}{{ user.get_full_name }}{% else %}{{ user.username }}{% endif %}
+                            {% if user.profile.role == 'admin' %}
+                                <span class="badge bg-danger">Адмін</span>
+                            {% elif user.profile.role == 'manager' %}
+                                <span class="badge bg-warning text-dark">Менеджер</span>
+                            {% endif %}
+                        </a>
+                        <ul class="dropdown-menu dropdown-menu-end">
+                            {% if user.profile.is_admin %}
+                            <li>
+                                <a class="dropdown-item" href="{% url 'user_management' %}">
+                                    <i class="bi bi-people"></i> Управління користувачами
+                                </a>
+                            </li>
+                            {% endif %}
+
+                            {% if user.profile.is_manager %}
+                            <li>
+                                <a class="dropdown-item" href="{% url 'system_settings' %}">
+                                    <i class="bi bi-gear"></i> Налаштування системи
+                                </a>
+                            </li>
+                            <li><hr class="dropdown-divider"></li>
+                            {% endif %}
+
+                            <li>
+                                <a class="dropdown-item" href="{% url 'logout' %}">
+                                    <i class="bi bi-box-arrow-right"></i> Вийти
+                                </a>
+                            </li>
+                        </ul>
+                    </li>
+                    {% else %}
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'login' %}"><i class="bi bi-box-arrow-in-right"></i> Увійти</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="{% url 'register' %}"><i class="bi bi-person-plus"></i> Зареєструватися</a>
+                    </li>
+                    {% endif %}
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="container-fluid">
+        <div class="row">
+            {% if user.is_authenticated %}
+            <!-- Sidebar (only when authenticated) -->
+            <div class="col-lg-2 d-none d-lg-block p-0">
+                <div class="sidebar bg-light p-3">
+                    <div class="d-flex align-items-center mb-3 mt-2">
+                        <i class="bi bi-lightning-charge-fill fs-4 me-2 text-primary"></i>
+                        <span class="fs-5 fw-semibold">Навігація</span>
+                    </div>
+                    <hr>
+                    <ul class="nav flex-column">
+                        <li class="nav-item">
+                            <a class="nav-link {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}"
+                               href="{% url 'dashboard' %}">
+                                <i class="bi bi-speedometer2"></i> Панель моніторингу
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link {% if request.resolver_match.url_name == 'logs_list' %}active{% endif %}"
+                               href="{% url 'logs_list' %}">
+                                <i class="bi bi-list-ul"></i> Записи енергосистеми
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link {% if request.resolver_match.url_name == 'backups_list' %}active{% endif %}"
+                               href="{% url 'backups_list' %}">
+                                <i class="bi bi-server"></i> Резервні копії
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link {% if request.resolver_match.url_name == 'analytics' %}active{% endif %}"
+                               href="{% url 'analytics' %}">
+                                <i class="bi bi-graph-up"></i> Аналітика та тенденції
+                            </a>
+                        </li>
+
+                        {% if user.profile.is_manager %}
+                        <li class="nav-item mt-3">
+                            <div class="nav-link text-muted">
+                                <i class="bi bi-gear-fill"></i> Управління
+                            </div>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link {% if request.resolver_match.url_name == 'system_settings' %}active{% endif %}"
+                               href="{% url 'system_settings' %}">
+                                <i class="bi bi-sliders"></i> Налаштування системи
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link {% if request.resolver_match.url_name == 'scheduler_status' %}active{% endif %}"
+                               href="{% url 'scheduler_status' %}">
+                                <i class="bi bi-clock-history"></i> Статус планувальника
+                            </a>
+                        </li>
+                        {% endif %}
+
+                        {% if user.profile.is_admin %}
+                        <li class="nav-item mt-3">
+                            <div class="nav-link text-muted">
+                                <i class="bi bi-shield-lock-fill"></i> Адміністрування
+                            </div>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link {% if request.resolver_match.url_name == 'user_management' %}active{% endif %}"
+                               href="{% url 'user_management' %}">
+                                <i class="bi bi-people"></i> Управління користувачами
+                            </a>
+                        </li>
+                        {% endif %}
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Main Content Area -->
+            <div class="col-lg-10 col-md-12 py-3">
+                {% block main_content %}{% endblock %}
+            </div>
+            {% else %}
+            <!-- Full-width content when not authenticated -->
+            <div class="col-12">
+                {% block content %}{% endblock %}
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <p class="mb-0">Система моніторингу енергії &copy; {% now "Y" %}</p>
+        </div>
+    </footer>
+
+    <!-- Bootstrap JS Bundle -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+
+    <!-- CSRF token for HTMX -->
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            document.body.addEventListener('htmx:configRequest', function(evt) {
+                evt.detail.headers['X-CSRFToken'] = '{{ csrf_token }}';
+            });
+        });
+    </script>
+
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

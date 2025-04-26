@@ -1,0 +1,391 @@
+<!-- monitoring/templates/analytics/analytics.html -->
+{% extends 'base.html' %}
+
+{% block title %}Аналітика{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row mb-4">
+        <div class="col">
+            <h1 class="h3"><i class="bi bi-graph-up"></i> Аналітика та тенденції</h1>
+            <p class="text-muted">Аналіз даних моніторингу енергосистеми</p>
+        </div>
+    </div>
+
+    <!-- Period Selection -->
+    <div class="card shadow-sm mb-4">
+        <div class="card-body">
+            <div class="d-flex flex-wrap gap-2">
+                <a href="{% url 'analytics' %}?period=week" class="btn {% if period == 'week' %}btn-primary{% else %}btn-outline-primary{% endif %}">
+                    <i class="bi bi-calendar-week"></i> Тиждень
+                </a>
+                <a href="{% url 'analytics' %}?period=month" class="btn {% if period == 'month' %}btn-primary{% else %}btn-outline-primary{% endif %}">
+                    <i class="bi bi-calendar-month"></i> Місяць
+                </a>
+                <a href="{% url 'analytics' %}?period=year" class="btn {% if period == 'year' %}btn-primary{% else %}btn-outline-primary{% endif %}">
+                    <i class="bi bi-calendar3"></i> Рік
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Stats Summary -->
+    <div class="row g-3 mb-4">
+        <div class="col-md-3">
+            <div class="card shadow-sm">
+                <div class="card-body p-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <div class="text-muted small">Записів за період</div>
+                            <div class="h3">{{ logs_count }}</div>
+                        </div>
+                        <div class="fs-1 text-primary opacity-25">
+                            <i class="bi bi-database"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3">
+            <div class="card shadow-sm">
+                <div class="card-body p-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <div class="text-muted small">Аномалій виявлено</div>
+                            <div class="h3">{{ anomalies_count }}</div>
+                            <div class="small text-danger">{{ anomaly_percentage|floatformat:1 }}% записів</div>
+                        </div>
+                        <div class="fs-1 text-danger opacity-25">
+                            <i class="bi bi-exclamation-triangle"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3">
+            <div class="card shadow-sm">
+                <div class="card-body p-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <div class="text-muted small">Середнє навантаження</div>
+                            <div class="h3">{{ avg_load|floatformat:1 }} Вт</div>
+                        </div>
+                        <div class="fs-1 text-success opacity-25">
+                            <i class="bi bi-lightning-charge"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3">
+            <div class="card shadow-sm">
+                <div class="card-body p-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <div class="text-muted small">Пікове навантаження</div>
+                            <div class="h3">{{ peak_load|floatformat:1 }} Вт</div>
+                        </div>
+                        <div class="fs-1 text-warning opacity-25">
+                            <i class="bi bi-bar-chart"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Load Trend Chart -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card shadow-sm">
+                <div class="card-header bg-white py-3">
+                    <h5 class="mb-0">Тенденції навантаження</h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="loadTrendChart" height="300"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Anomalies & Backups -->
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="card shadow-sm h-100">
+                <div class="card-header bg-white py-3">
+                    <h5 class="mb-0">Аномалії за місяцями</h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="anomaliesChart" height="250"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <div class="card shadow-sm h-100">
+                <div class="card-header bg-white py-3">
+                    <h5 class="mb-0">Резервні копії за причиною</h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="backupsChart" height="250"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Top Anomaly Reasons -->
+    <div class="row">
+        <div class="col-md-6">
+            <div class="card shadow-sm">
+                <div class="card-header bg-white py-3">
+                    <h5 class="mb-0">Найчастіші причини аномалій</h5>
+                </div>
+                <div class="card-body">
+                    {% if top_anomalies %}
+                        <div class="table-responsive">
+                            <table class="table table-sm table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Причина</th>
+                                        <th>Кількість</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for anomaly in top_anomalies %}
+                                    <tr>
+                                        <td>{{ anomaly.anomaly_reason }}</td>
+                                        <td>
+                                            <div class="d-flex align-items-center">
+                                                <span class="me-3">{{ anomaly.count }}</span>
+                                                <div class="progress flex-grow-1" style="height: 8px;">
+                                                    <div class="progress-bar bg-danger" role="progressbar"
+                                                        style="width: {{ anomaly.count|divisibleby:top_anomalies.0.count|yesno:'100,0' }}{{ anomaly.count|mul:100|div:top_anomalies.0.count|floatformat:0 }}%">
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% else %}
+                        <div class="text-center py-4 text-muted">
+                            <i class="bi bi-emoji-smile fs-1"></i>
+                            <p class="mt-3">Аномалій не виявлено за обраний період</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        <!-- Backup Stats -->
+        <div class="col-md-6">
+            <div class="card shadow-sm">
+                <div class="card-header bg-white py-3">
+                    <h5 class="mb-0">Статистика резервних копій</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <div class="card bg-light">
+                                <div class="card-body p-3">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <div>
+                                            <div class="text-muted small">Всього резервних копій</div>
+                                            <div class="h4">{{ backups_count }}</div>
+                                        </div>
+                                        <div class="fs-2 text-primary opacity-25">
+                                            <i class="bi bi-server"></i>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <div class="card bg-light">
+                                <div class="card-body p-3">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <div>
+                                            <div class="text-muted small">Успішність</div>
+                                            <div class="h4">{{ backup_success_rate|floatformat:1 }}%</div>
+                                        </div>
+                                        <div class="fs-2 text-success opacity-25">
+                                            <i class="bi bi-check-circle"></i>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="progress mb-3" style="height: 20px;">
+                        <div class="progress-bar bg-success" role="progressbar"
+                             style="width: {{ backup_success_rate }}%"
+                             aria-valuenow="{{ backup_success_rate }}" aria-valuemin="0" aria-valuemax="100">
+                            Успішно ({{ successful_backups }})
+                        </div>
+                        <div class="progress-bar bg-danger" role="progressbar"
+                             style="width: {{ 100|sub:backup_success_rate }}%"
+                             aria-valuenow="{{ 100|sub:backup_success_rate }}" aria-valuemin="0" aria-valuemax="100">
+                            Невдало ({{ backups_count|sub:successful_backups }})
+                        </div>
+                    </div>
+
+                    <div class="text-center">
+                        <p class="text-muted mb-0">
+                            Аналіз за період: {{ start_date|date:"d.m.Y" }} - {{ end_date|date:"d.m.Y" }}
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Load Trend Chart
+        fetch(`{% url 'load_trend_chart' %}?period={{ period }}`)
+            .then(response => response.json())
+            .then(data => {
+                const ctx = document.getElementById('loadTrendChart').getContext('2d');
+                new Chart(ctx, {
+                    type: 'line',
+                    data: data,
+                    options: {
+                        responsive: true,
+                        interaction: {
+                            mode: 'index',
+                            intersect: false,
+                        },
+                        plugins: {
+                            title: {
+                                display: true,
+                                text: 'Тенденції навантаження системи'
+                            },
+                            tooltip: {
+                                enabled: true
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                title: {
+                                    display: true,
+                                    text: 'Навантаження (Вт)'
+                                }
+                            },
+                            x: {
+                                title: {
+                                    display: true,
+                                    text: 'Дата'
+                                }
+                            }
+                        }
+                    }
+                });
+            })
+            .catch(error => console.error('Error loading trend chart:', error));
+
+        // Anomalies Chart
+        fetch('{% url "anomalies_by_month_chart" %}')
+            .then(response => response.json())
+            .then(data => {
+                const ctx = document.getElementById('anomaliesChart').getContext('2d');
+                new Chart(ctx, {
+                    type: 'bar',
+                    data: data,
+                    options: {
+                        responsive: true,
+                        plugins: {
+                            title: {
+                                display: true,
+                                text: 'Аномалії за місяцями'
+                            },
+                            legend: {
+                                position: 'top',
+                            },
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                title: {
+                                    display: true,
+                                    text: 'Кількість'
+                                }
+                            },
+                            y1: {
+                                position: 'right',
+                                beginAtZero: true,
+                                title: {
+                                    display: true,
+                                    text: 'Відсоток (%)'
+                                },
+                                max: 100,
+                                grid: {
+                                    drawOnChartArea: false,
+                                }
+                            }
+                        }
+                    }
+                });
+            })
+            .catch(error => console.error('Error loading anomalies chart:', error));
+
+        // Backups Chart
+        fetch(`{% url 'backups_by_reason_chart' %}?period={{ period }}`)
+            .then(response => response.json())
+            .then(data => {
+                const ctx = document.getElementById('backupsChart').getContext('2d');
+                new Chart(ctx, {
+                    type: 'bar',
+                    data: data,
+                    options: {
+                        responsive: true,
+                        plugins: {
+                            title: {
+                                display: true,
+                                text: 'Резервні копії за причиною'
+                            },
+                            legend: {
+                                position: 'top',
+                            },
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                title: {
+                                    display: true,
+                                    text: 'Кількість'
+                                },
+                                stacked: true,
+                            },
+                            y1: {
+                                position: 'right',
+                                beginAtZero: true,
+                                title: {
+                                    display: true,
+                                    text: 'Розмір (МБ)'
+                                },
+                                grid: {
+                                    drawOnChartArea: false,
+                                }
+                            },
+                            x: {
+                                stacked: true,
+                            }
+                        }
+                    }
+                });
+            })
+            .catch(error => console.error('Error loading backups chart:', error));
+    });
+</script>
+{% endblock %}
