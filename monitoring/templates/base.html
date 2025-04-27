@@ -20,6 +20,21 @@
 
     <!-- Custom CSS -->
     <style>
+        html, body {
+            height: 100%;
+        }
+
+        body {
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+        }
+
+        .content-wrapper {
+            flex: 1 0 auto;
+            margin-bottom: 2rem;
+        }
+
         .sidebar {
             min-height: 100vh;
             box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
@@ -57,7 +72,8 @@
             padding: 1rem 0;
             background-color: #f8f9fa;
             text-align: center;
-            margin-top: 2rem;
+            flex-shrink: 0;
+            margin-top: auto;
         }
 
         /* Table styling */
@@ -120,7 +136,11 @@
             font: inherit;
             cursor: pointer;
             outline: inherit;
+            width: 100%;
+            text-align: left;
+            padding-left: 0;
         }
+
     </style>
 
     {% block extra_css %}{% endblock %}
@@ -198,7 +218,7 @@
                             <li>
                                 <form class="dropdown-item" method="post" action="{% url 'logout' %}">
                                     {% csrf_token %}
-                                    <i class="bi bi-box-arrow-right"></i><button type="submit" id="logout-button">Вийти</button>
+                                    <button type="submit" id="logout-button"><i class="bi bi-box-arrow-right"></i> Вийти</button>
                                 </form>
                             </li>
                         </ul>
@@ -217,90 +237,13 @@
     </nav>
 
     <!-- Main Content -->
-    <div class="container-fluid">
-        <div class="row">
-            {% if user.is_authenticated %}
-            <!-- Sidebar (only when authenticated) -->
-            <div class="col-lg-2 d-none d-lg-block p-0">
-                <div class="sidebar bg-light p-3">
-                    <div class="d-flex align-items-center mb-3 mt-2">
-                        <i class="bi bi-lightning-charge-fill fs-4 me-2 text-primary"></i>
-                        <span class="fs-5 fw-semibold">Навігація</span>
-                    </div>
-                    <hr>
-                    <ul class="nav flex-column">
-                        <li class="nav-item">
-                            <a class="nav-link {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}"
-                               href="{% url 'dashboard' %}">
-                                <i class="bi bi-speedometer2"></i> Панель моніторингу
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link {% if request.resolver_match.url_name == 'logs_list' %}active{% endif %}"
-                               href="{% url 'logs_list' %}">
-                                <i class="bi bi-list-ul"></i> Записи енергосистеми
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link {% if request.resolver_match.url_name == 'backups_list' %}active{% endif %}"
-                               href="{% url 'backups_list' %}">
-                                <i class="bi bi-server"></i> Резервні копії
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link {% if request.resolver_match.url_name == 'analytics' %}active{% endif %}"
-                               href="{% url 'analytics' %}">
-                                <i class="bi bi-graph-up"></i> Аналітика та тенденції
-                            </a>
-                        </li>
-
-                        {% if user.profile.is_manager %}
-                        <li class="nav-item mt-3">
-                            <div class="nav-link text-muted">
-                                <i class="bi bi-gear-fill"></i> Управління
-                            </div>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link {% if request.resolver_match.url_name == 'system_settings' %}active{% endif %}"
-                               href="{% url 'system_settings' %}">
-                                <i class="bi bi-sliders"></i> Налаштування системи
-                            </a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link {% if request.resolver_match.url_name == 'scheduler_status' %}active{% endif %}"
-                               href="{% url 'scheduler_status' %}">
-                                <i class="bi bi-clock-history"></i> Статус планувальника
-                            </a>
-                        </li>
-                        {% endif %}
-
-                        {% if user.profile.is_admin %}
-                        <li class="nav-item mt-3">
-                            <div class="nav-link text-muted">
-                                <i class="bi bi-shield-lock-fill"></i> Адміністрування
-                            </div>
-                        </li>
-                        <li class="nav-item">
-                            <a class="nav-link {% if request.resolver_match.url_name == 'user_management' %}active{% endif %}"
-                               href="{% url 'user_management' %}">
-                                <i class="bi bi-people"></i> Управління користувачами
-                            </a>
-                        </li>
-                        {% endif %}
-                    </ul>
+    <div class="content-wrapper">
+        <div class="container-fluid">
+            <div class="row">
+                <div class="col-12">
+                    {% block content %}{% endblock %}
                 </div>
             </div>
-
-            <!-- Main Content Area -->
-            <div class="col-lg-10 col-md-12 py-3">
-                {% block main_content %}{% endblock %}
-            </div>
-            {% else %}
-            <!-- Full-width content when is not authenticated -->
-            <div class="col-12">
-                {% block content %}{% endblock %}
-            </div>
-            {% endif %}
         </div>
     </div>
 

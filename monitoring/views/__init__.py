@@ -3,6 +3,7 @@
 # Import all views to make them available through the views package
 from .dashboard import *
 from .logs import *
+from .backups import *
 from monitoring.settings import system_settings
 from monitoring.scheduler import (
     scheduler_status, start_scheduler, stop_scheduler, restart_scheduler

@@ -13,6 +13,7 @@
     </div>
 
     <!-- Alert for scheduler status -->
+{#{{ stats.scheduler_active }}#}
     {% if not stats.scheduler_active %}
     <div class="alert alert-warning">
         <i class="bi bi-exclamation-triangle-fill me-2"></i> <strong>Увага!</strong> Планувальник не запущено.

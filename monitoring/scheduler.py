@@ -49,7 +49,7 @@ def get_scheduler_info():
         'is_running': True,
         'pid': proc.pid,
         'started_at': datetime.datetime.fromtimestamp(proc.create_time()),
-        'uptime': timezone.now() - datetime.datetime.fromtimestamp(proc.create_time()),
+        'uptime': timezone.now() - timezone.make_aware(datetime.datetime.fromtimestamp(proc.create_time())),
         'status': 'Активний',
     }
 

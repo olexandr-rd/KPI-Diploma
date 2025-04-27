@@ -2,13 +2,10 @@
 
 from django.shortcuts import render
 from django.contrib.auth.decorators import login_required
-import os
 import psutil
 import datetime
-from pathlib import Path
 from django.utils import timezone
-
-from ..models import EnergyLog, BackupLog, SystemSettings, UserProfile
+from ..models import EnergyLog, BackupLog, SystemSettings
 
 
 def get_stats():
@@ -34,8 +31,8 @@ def get_stats():
     # Calculate storage used by backups
     storage_used = sum(b.size_kb for b in BackupLog.objects.filter(status="SUCCESS")) / 1024  # Convert to MB
 
-    # Calculate next scheduled data collection time
-    # First, get current time and round to nearest 15 min
+    # Calculate the next scheduled data collection time
+    # First, get the current time and round to the nearest 15 min
     minutes_to_add = 15 - (now.minute % 15)
     next_data_collection = now + datetime.timedelta(minutes=minutes_to_add)
     next_data_collection = next_data_collection.replace(second=0, microsecond=0)
@@ -66,22 +63,8 @@ def get_stats():
     # Check if scheduler is running
     scheduler_active = False
     scheduler_status = "Неактивний"
-    last_scheduler_check = now
+    last_scheduler_check = now  # Always set the check time to now
 
-    # Get the absolute path to the project directory
-    BASE_DIR = Path(__file__).resolve().parent.parent.parent
-
-    # First check if scheduler.log exists and when it was last modified
-    scheduler_log_path = Path(os.path.join(BASE_DIR, "logs", "scheduler.log"))
-    if scheduler_log_path.exists():
-        last_modified_naive = datetime.datetime.fromtimestamp(scheduler_log_path.stat().st_mtime)
-        last_modified = timezone.make_aware(last_modified_naive)
-        if (now - last_modified).total_seconds() < 3600:
-            last_scheduler_check = last_modified
-            scheduler_active = True
-            scheduler_status = "Активний"
-
-    # Double-check by looking for Python process running scheduled_tasks.py
     try:
         for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
             try:
@@ -89,6 +72,7 @@ def get_stats():
                 if proc.info.get('cmdline'):
                     cmdline_str = ' '.join(proc.info['cmdline'])
                     if 'python' in cmdline_str.lower() and 'scheduled_tasks.py' in cmdline_str:
+
                         scheduler_active = True
                         scheduler_status = "Активний"
                         break
@@ -126,7 +110,7 @@ def get_stats():
 def dashboard(request):
     """Main dashboard view"""
     # Get recent logs
-    logs = EnergyLog.objects.all().order_by('-timestamp')[:10]
+    logs = EnergyLog.objects.all().order_by('-timestamp')[:15]
 
     # Get recent backup logs
     backups = BackupLog.objects.all().order_by('-timestamp')[:5]
@@ -155,99 +139,12 @@ def stats_partial(request):
 @login_required
 def logs_partial(request):
     """HTMX partial view for energy logs"""
-    logs = EnergyLog.objects.all().order_by('-timestamp')[:10]
+    logs = EnergyLog.objects.all().order_by('-timestamp')[:15]
     return render(request, 'dashboard/partials/logs_table.html', {'logs': logs})
 
 
 @login_required
 def backups_partial(request):
     """HTMX partial view for backup logs"""
-    backups = BackupLog.objects.all().order_by('-timestamp')[:5]
-    return render(request, 'dashboard/partials/backups_table.html', {'backups': backups})
-
-
-@login_required
-def run_simulation(request):
-    """Run data simulation with model application"""
-    if request.method == 'POST':
-        try:
-            # Run the simulation directly instead of using subprocess
-            from ml.simulate_data import create_energy_reading, apply_models_to_record
-
-            # Flag as manual and record the user who triggered it
-            is_manual = True
-            user = request.user
-
-            # 1. Create a new energy reading (normal data)
-            log = create_energy_reading(anomaly=False, abnormal_prediction=False,
-                                        is_manual=is_manual, user=user)
-            print(f"Created new energy log with ID: {log.id}")
-
-            # 2. Apply ML models to the new reading
-            is_anomaly, anomaly_score, predicted_load = apply_models_to_record(log.id)
-
-            print(f"Applied models to record {log.id}")
-            print(f"Is anomaly: {is_anomaly}, Score: {anomaly_score}, Predicted next load: {predicted_load}")
-
-            # 3. Check if backup is needed based on anomaly or prediction
-            settings = SystemSettings.objects.first() or {
-                'min_load_threshold': 500,
-                'max_load_threshold': 2000,
-            }
-
-            if is_anomaly or (predicted_load is not None and
-                              (predicted_load < settings.min_load_threshold or
-                               predicted_load > settings.max_load_threshold)):
-                from ml.backup_database import backup_database
-                backup_performed = backup_database(log.id)
-                if backup_performed:
-                    print("Automatic backup performed")
-
-        except Exception as e:
-            print(f"Error running simulation: {e}")
-
-    # Return updated logs
-    logs = EnergyLog.objects.all().order_by('-timestamp')[:10]
-    return render(request, 'dashboard/partials/logs_table.html', {'logs': logs})
-
-
-@login_required
-def force_backup(request):
-    """Force a manual backup without creating new data"""
-    if request.method == 'POST':
-        try:
-            from django.contrib import messages
-            # Check if user has manager or admin role
-            try:
-                profile = request.user.profile
-                if not profile.is_manager:
-                    messages.error(request, "У вас немає прав для створення резервних копій.")
-                    backups = BackupLog.objects.all().order_by('-timestamp')[:5]
-                    return render(request, 'dashboard/partials/backups_table.html', {'backups': backups})
-            except UserProfile.DoesNotExist:
-                messages.error(request, "У вас немає профілю користувача.")
-                backups = BackupLog.objects.all().order_by('-timestamp')[:5]
-                return render(request, 'dashboard/partials/backups_table.html', {'backups': backups})
-
-            # Get the latest record
-            latest_record = EnergyLog.objects.latest('timestamp')
-
-            print(f"Forcing backup for latest record ID: {latest_record.id}")
-
-            # Import backup function directly
-            from ml.backup_database import backup_database
-
-            # Force backup of the latest record
-            backup_performed = backup_database(latest_record.id, force=True)
-
-            if backup_performed:
-                print("Backup completed successfully")
-            else:
-                print("Backup failed")
-
-        except Exception as e:
-            print(f"Error forcing backup: {e}")
-
-    # Return updated backups
     backups = BackupLog.objects.all().order_by('-timestamp')[:5]
     return render(request, 'dashboard/partials/backups_table.html', {'backups': backups})

@@ -157,7 +157,6 @@ def backup_database(record_id=None, force=False, reason=None):
         bool: True if backup was performed
     """
     # Load system settings
-    settings = load_system_settings()
 
     # Get the record to check
     if record_id:
@@ -196,8 +195,9 @@ def backup_database(record_id=None, force=False, reason=None):
             f"Record {record.id} does not need backup (anomaly={is_anomalous}, pred_load_abnormal={predicted_load_abnormal})")
         return False
 
-    # Get database settings
-    db_settings = settings.DATABASES['default']
+    # Get database settings from Django settings, not from the SystemSettings model
+    from django.conf import settings as django_settings
+    db_settings = django_settings.DATABASES['default']
 
     # Create backup filename with timestamp
     timestamp = timezone.now().strftime('%Y%m%d_%H%M%S')
@@ -291,9 +291,9 @@ def backup_database(record_id=None, force=False, reason=None):
 
 
 if __name__ == "__main__":
-    # If specific reason is provided as command line argument, use it
+    # If a specific reason is provided as a command line argument, use it
     if len(sys.argv) > 1 and sys.argv[1] == "scheduled":
         create_scheduled_backup()
     else:
-        # Check latest record and backup if needed
+        # Check the latest record and backup if needed
         backup_database()

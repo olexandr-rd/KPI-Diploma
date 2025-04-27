@@ -71,6 +71,13 @@ class CustomUserCreationForm(UserCreationForm):
         widget=forms.PasswordInput(attrs={'class': 'form-control', 'placeholder': 'Підтвердження пароля'})
     )
 
+    error_messages = {
+        'password_mismatch': "Паролі не співпадають.",
+        'password_too_short': "Пароль занадто короткий. Має містити щонайменше 8 символів.",
+        'password_too_common': "Цей пароль занадто поширений.",
+        'password_entirely_numeric': "Пароль не може містити тільки цифри.",
+    }
+
     class Meta:
         model = User
         fields = ('username', 'first_name', 'last_name', 'email', 'password1', 'password2')

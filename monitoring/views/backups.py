@@ -81,7 +81,6 @@ def backups_list(request):
         'reasons': reasons,
     })
 
-
 @login_required
 def run_simulation(request):
     """Run data simulation with model application"""
@@ -123,7 +122,7 @@ def run_simulation(request):
             print(f"Error running simulation: {e}")
 
     # Return updated logs
-    logs = EnergyLog.objects.all().order_by('-timestamp')[:10]
+    logs = EnergyLog.objects.all().order_by('-timestamp')[:15]
     return render(request, 'dashboard/partials/logs_table.html', {'logs': logs})
 
 
@@ -132,6 +131,7 @@ def force_backup(request):
     """Force a manual backup without creating new data"""
     if request.method == 'POST':
         try:
+            from django.contrib import messages
             # Check if user has manager or admin role
             try:
                 profile = request.user.profile

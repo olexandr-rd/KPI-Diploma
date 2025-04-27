@@ -200,7 +200,7 @@ def start_scheduler():
     # Log initial schedule information
     logger.info("Current schedule:")
     for job in schedule.jobs:
-        next_run = job.next_run
+        next_run = timezone.make_aware(job.next_run)
         if next_run:
             time_until = (next_run - timezone.now()).total_seconds() / 60
             logger.info(f"- Job {job.job_func.__name__} will run in {time_until:.1f} minutes")
@@ -222,7 +222,7 @@ def start_scheduler():
         if timezone.now().minute % 5 == 0 and timezone.now().second < 2:
             logger.info("Periodic schedule check:")
             for job in schedule.jobs:
-                next_run = job.next_run
+                next_run = timezone.make_aware(job.next_run)
                 if next_run:
                     time_until = (next_run - timezone.now()).total_seconds() / 60
                     logger.info(f"- Job {job.job_func.__name__} will run in {time_until:.1f} minutes")
