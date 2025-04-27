@@ -1,4 +1,4 @@
-# monitoring/models.py - Adding User Profile
+# monitoring/models.py - Updated SystemSettings model
 
 from django.db import models
 from django.contrib.auth.models import User
@@ -37,6 +37,10 @@ class SystemSettings(models.Model):
                                                 help_text="Зберігати резервні копії (днів)")
     max_backups = models.IntegerField(default=20,
                                       help_text="Максимальна кількість резервних копій")
+
+    # Data collection settings
+    data_collection_interval = models.IntegerField(default=15,
+                                                   help_text="Інтервал збору даних (хвилин)")
 
     # Energy system settings
     min_load_threshold = models.FloatField(default=500,
@@ -101,6 +105,10 @@ class EnergyLog(models.Model):
             return "Низька ймовірність"
         else:
             return "Норма"
+
+    def get_anomaly_score_explanation(self):
+        """Provides an explanation of the anomaly score scale"""
+        return "Оцінка аномалії від -1 до 1. Значення менше -0.1 вважаються аномаліями, де -1 - найбільш аномальне."
 
     class Meta:
         indexes = [

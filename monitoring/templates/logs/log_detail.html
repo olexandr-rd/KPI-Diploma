@@ -105,9 +105,38 @@
                         <tr>
                             <th>Оцінка аномалії:</th>
                             <td>
-                                {% if log.anomaly_score %}
-                                    {{ log.anomaly_score|floatformat:4 }}
-                                    <span class="text-muted ms-2">({{ log.get_anomaly_description }})</span>
+                                {% if log.anomaly_score is not None %}
+                                    <div class="d-flex align-items-center">
+                                        <span class="me-2">{{ log.anomaly_score|floatformat:4 }}</span>
+                                        <div class="progress flex-grow-1" style="height: 8px;">
+                                            <div class="progress-bar
+                                                {% if log.anomaly_score < -0.5 %}bg-danger
+                                                {% elif log.anomaly_score < -0.3 %}bg-warning
+                                                {% elif log.anomaly_score < -0.1 %}bg-info
+                                                {% else %}bg-success{% endif %}"
+                                                role="progressbar"
+                                                style="width: {{ log.anomaly_score|add:1|div:2|mul:100|floatformat:0 }}%"
+                                                aria-valuenow="{{ log.anomaly_score|floatformat:2 }}"
+                                                aria-valuemin="-1"
+                                                aria-valuemax="1">
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="small text-muted mt-1">
+                                        <i class="bi bi-info-circle"></i> {{ log.get_anomaly_description }}
+                                    </div>
+                                    <div class="mt-2 small bg-light p-2 rounded">
+                                        <p class="mb-1"><strong>Про оцінку аномалії:</strong></p>
+                                        <p class="mb-0">
+                                            Оцінка аномалії в діапазоні від -1 до 1:
+                                            <ul class="mb-0">
+                                                <li><span class="text-danger">Менше -0.5</span>: Висока ймовірність аномалії</li>
+                                                <li><span class="text-warning">-0.5 до -0.3</span>: Середня ймовірність аномалії</li>
+                                                <li><span class="text-info">-0.3 до -0.1</span>: Низька ймовірність аномалії</li>
+                                                <li><span class="text-success">Більше -0.1</span>: Нормальний запис</li>
+                                            </ul>
+                                        </p>
+                                    </div>
                                 {% else %}
                                     <span class="text-muted">Не визначено</span>
                                 {% endif %}

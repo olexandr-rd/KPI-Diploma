@@ -22,18 +22,21 @@ def get_stats():
     backup_success = BackupLog.objects.filter(status="SUCCESS").count()
     backup_failed = BackupLog.objects.filter(status="FAILED").count()
 
-    # Get recent logs distribution
-    recent_logs_base = EnergyLog.objects.all().order_by('-timestamp')
-    recent_logs = recent_logs_base[:1000]  # слайс тільки для отримання всього набору
-    manual_count = recent_logs_base.filter(is_manual=True)[:1000].count()
-    auto_count = recent_logs.count() - manual_count
+    # Calculate anomaly percentage
+    anomaly_percentage = 0
+    if total_logs > 0:
+        anomaly_percentage = (anomaly_count / total_logs) * 100
+
+    # Get all logs distribution by type
+    manual_count = EnergyLog.objects.filter(is_manual=True).count()
+    auto_count = total_logs - manual_count
 
     # Calculate storage used by backups
     storage_used = sum(b.size_kb for b in BackupLog.objects.filter(status="SUCCESS")) / 1024  # Convert to MB
 
     # Calculate the next scheduled data collection time
-    # First, get the current time and round to the nearest 15 min
-    minutes_to_add = 15 - (now.minute % 15)
+    data_collection_interval = settings.data_collection_interval if hasattr(settings, 'data_collection_interval') else 15
+    minutes_to_add = data_collection_interval - (now.minute % data_collection_interval)
     next_data_collection = now + datetime.timedelta(minutes=minutes_to_add)
     next_data_collection = next_data_collection.replace(second=0, microsecond=0)
 
@@ -72,7 +75,6 @@ def get_stats():
                 if proc.info.get('cmdline'):
                     cmdline_str = ' '.join(proc.info['cmdline'])
                     if 'python' in cmdline_str.lower() and 'scheduled_tasks.py' in cmdline_str:
-
                         scheduler_active = True
                         scheduler_status = "Активний"
                         break
@@ -86,6 +88,7 @@ def get_stats():
     stats = {
         'total_logs': total_logs,
         'anomaly_count': anomaly_count,
+        'anomaly_percentage': anomaly_percentage,
         'backup_success': backup_success,
         'backup_failed': backup_failed,
         'storage_used': storage_used,
@@ -101,6 +104,7 @@ def get_stats():
         'last_scheduler_check': last_scheduler_check,
         'manual_count': manual_count,
         'auto_count': auto_count,
+        'data_collection_interval': data_collection_interval,
     }
 
     return stats

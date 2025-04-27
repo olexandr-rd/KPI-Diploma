@@ -6,17 +6,41 @@ import psutil
 import time
 import datetime
 import sys
+import signal
 from pathlib import Path
 from django.shortcuts import render, redirect
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.utils import timezone
 
-from .models import UserProfile
+from .models import UserProfile, EnergyLog, BackupLog
 
 
 def find_scheduler_process():
     """Find the scheduler process if it's running"""
+    # First, check for PID file
+    BASE_DIR = Path(__file__).resolve().parent.parent
+    pid_file = os.path.join(BASE_DIR, 'logs', 'scheduler.pid')
+
+    if os.path.exists(pid_file):
+        try:
+            with open(pid_file, 'r') as f:
+                pid = int(f.read().strip())
+            # Check if process with this PID exists
+            try:
+                proc = psutil.Process(pid)
+                # Verify it's actually our scheduler
+                cmdline_str = ' '.join(proc.cmdline())
+                if 'python' in cmdline_str.lower() and 'scheduled_tasks.py' in cmdline_str:
+                    return proc
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                # PID file exists but process doesn't, clean up the file
+                os.remove(pid_file)
+        except:
+            # Problems reading PID file, ignore and fall back to process search
+            pass
+
+    # Fall back to searching all processes
     for proc in psutil.process_iter(['pid', 'name', 'cmdline']):
         try:
             # Get full command line as string to perform more flexible matching
@@ -81,6 +105,54 @@ def get_scheduler_info():
     return info
 
 
+def kill_scheduler_process(proc):
+    """Kill a scheduler process with escalating force"""
+    if not proc:
+        return False
+
+    pid = proc.pid
+    success = False
+
+    try:
+        # First, try to terminate gracefully
+        proc.terminate()
+
+        # Wait up to 5 seconds for it to exit
+        for i in range(50):
+            if not proc.is_running():
+                success = True
+                break
+            time.sleep(0.1)
+
+        # If still running, send SIGINT (equivalent to Ctrl+C)
+        if not success:
+            os.kill(pid, signal.SIGINT)
+
+            # Wait another 5 seconds
+            for i in range(50):
+                if not psutil.pid_exists(pid):
+                    success = True
+                    break
+                time.sleep(0.1)
+
+        # If still running, force kill
+        if not success:
+            proc.kill()
+            success = True
+
+        # Clean up PID file if it exists
+        BASE_DIR = Path(__file__).resolve().parent.parent
+        pid_file = os.path.join(BASE_DIR, 'logs', 'scheduler.pid')
+        if os.path.exists(pid_file):
+            os.remove(pid_file)
+
+    except Exception as e:
+        print(f"Error killing process: {e}")
+        return False
+
+    return success
+
+
 @login_required
 def scheduler_status(request):
     """View for managing scheduler process - manager role required"""
@@ -96,6 +168,11 @@ def scheduler_status(request):
 
     # Get scheduler info
     scheduler_info = get_scheduler_info()
+
+    # Add operation counters for information
+    scheduler_info['total_logs'] = EnergyLog.objects.count()
+    scheduler_info['total_backups'] = BackupLog.objects.count()
+    scheduler_info['total_anomalies'] = EnergyLog.objects.filter(is_anomaly=True).count()
 
     return render(request, 'settings/scheduler_status.html', {
         'scheduler': scheduler_info,
@@ -137,6 +214,12 @@ def start_scheduler(request):
         # Use the same Python executable running this Django app
         python_executable = sys.executable
 
+        # Clear any existing PID file to prevent confusion
+        pid_file = os.path.join(logs_dir, 'scheduler.pid')
+        if os.path.exists(pid_file):
+            os.remove(pid_file)
+
+        # Start the process with minimal output and handling
         subprocess.Popen(
             [python_executable, script_path],
             stdout=open(log_file, "a"),
@@ -146,7 +229,7 @@ def start_scheduler(request):
         )
 
         # Wait a moment and check if it started
-        time.sleep(2)
+        time.sleep(3)
         proc = find_scheduler_process()
 
         if proc:
@@ -186,21 +269,11 @@ def stop_scheduler(request):
     try:
         pid = proc.pid
 
-        # Try to terminate gracefully first
-        proc.terminate()
-
-        # Wait up to 5 seconds for it to exit
-        for i in range(50):
-            if not proc.is_running():
-                break
-            time.sleep(0.1)
-
-        # If still running, force kill
-        if proc.is_running():
-            proc.kill()
-            messages.warning(request, f"Планувальник (PID {pid}) примусово зупинено")
-        else:
+        if kill_scheduler_process(proc):
             messages.success(request, f"Планувальник (PID {pid}) успішно зупинено")
+        else:
+            messages.warning(request,
+                             f"Планувальник (PID {pid}) примусово зупинено, але можуть залишитися активні процеси")
 
     except Exception as e:
         messages.error(request, f"Помилка зупинки планувальника: {str(e)}")
@@ -229,25 +302,15 @@ def restart_scheduler(request):
     if proc:
         try:
             pid = proc.pid
-
-            # Try to terminate gracefully
-            proc.terminate()
-
-            # Wait for it to exit
-            for i in range(50):
-                if not proc.is_running():
-                    break
-                time.sleep(0.1)
-
-            # If still running, force kill
-            if proc.is_running():
-                proc.kill()
+            if not kill_scheduler_process(proc):
+                messages.error(request, "Не вдалося зупинити поточний планувальник")
+                return redirect('scheduler_status')
         except Exception as e:
             messages.error(request, f"Помилка зупинки планувальника: {str(e)}")
             return redirect('scheduler_status')
 
     # Wait a bit
-    time.sleep(1)
+    time.sleep(2)
 
     # Start again
     try:
@@ -267,7 +330,7 @@ def restart_scheduler(request):
         )
 
         # Wait a moment and check if it started
-        time.sleep(2)
+        time.sleep(3)
         proc = find_scheduler_process()
 
         if proc:
@@ -277,5 +340,125 @@ def restart_scheduler(request):
 
     except Exception as e:
         messages.error(request, f"Помилка запуску планувальника: {str(e)}")
+
+    return redirect('scheduler_status')
+
+
+@login_required
+def run_maintenance(request):
+    """Run maintenance tasks manually"""
+    if request.method != 'POST':
+        return redirect('scheduler_status')
+
+    # Check if user has manager or admin role
+    try:
+        profile = request.user.profile
+        if not profile.is_manager:
+            messages.error(request, "У вас немає прав для запуску обслуговування.")
+            return redirect('dashboard')
+    except UserProfile.DoesNotExist:
+        messages.error(request, "У вас немає профілю користувача.")
+        return redirect('dashboard')
+
+    try:
+        BASE_DIR = Path(__file__).resolve().parent.parent
+        script_path = os.path.join(BASE_DIR, 'ml', 'scheduled_tasks.py')
+        python_executable = sys.executable
+
+        # Run maintenance command
+        result = subprocess.run(
+            [python_executable, script_path, "maintenance"],
+            capture_output=True,
+            text=True,
+            cwd=str(BASE_DIR)
+        )
+
+        if result.returncode == 0:
+            messages.success(request, "Задачі обслуговування виконано успішно.")
+        else:
+            messages.error(request, f"Помилка виконання обслуговування: {result.stderr}")
+
+    except Exception as e:
+        messages.error(request, f"Помилка запуску обслуговування: {str(e)}")
+
+    return redirect('scheduler_status')
+
+
+@login_required
+def run_simulation_anomaly(request):
+    """Run simulation with anomaly"""
+    if request.method != 'POST':
+        return redirect('scheduler_status')
+
+    # Check if user has manager or admin role
+    try:
+        profile = request.user.profile
+        if not profile.is_manager:
+            messages.error(request, "У вас немає прав для запуску симуляції аномалії.")
+            return redirect('dashboard')
+    except UserProfile.DoesNotExist:
+        messages.error(request, "У вас немає профілю користувача.")
+        return redirect('dashboard')
+
+    try:
+        BASE_DIR = Path(__file__).resolve().parent.parent
+        script_path = os.path.join(BASE_DIR, 'ml', 'scheduled_tasks.py')
+        python_executable = sys.executable
+
+        # Run anomaly simulation
+        result = subprocess.run(
+            [python_executable, script_path, "anomaly"],
+            capture_output=True,
+            text=True,
+            cwd=str(BASE_DIR)
+        )
+
+        if result.returncode == 0:
+            messages.success(request, "Симуляція аномалії виконана успішно.")
+        else:
+            messages.error(request, f"Помилка виконання симуляції аномалії: {result.stderr}")
+
+    except Exception as e:
+        messages.error(request, f"Помилка запуску симуляції аномалії: {str(e)}")
+
+    return redirect('scheduler_status')
+
+
+@login_required
+def run_simulation_abnormal_prediction(request):
+    """Run simulation with abnormal prediction"""
+    if request.method != 'POST':
+        return redirect('scheduler_status')
+
+    # Check if user has manager or admin role
+    try:
+        profile = request.user.profile
+        if not profile.is_manager:
+            messages.error(request, "У вас немає прав для запуску симуляції аномального прогнозу.")
+            return redirect('dashboard')
+    except UserProfile.DoesNotExist:
+        messages.error(request, "У вас немає профілю користувача.")
+        return redirect('dashboard')
+
+    try:
+        BASE_DIR = Path(__file__).resolve().parent.parent
+        script_path = os.path.join(BASE_DIR, 'ml', 'scheduled_tasks.py')
+        python_executable = sys.executable
+
+        # Run abnormal prediction simulation
+        result = subprocess.run(
+            [python_executable, script_path, "abnormal_prediction"],
+            capture_output=True,
+            text=True,
+            cwd=str(BASE_DIR)
+        )
+
+        if result.returncode == 0:
+            messages.success(request, "Симуляція аномального прогнозу виконана успішно.")
+        else:
+            messages.error(request, f"Помилка виконання симуляції аномального прогнозу: {result.stderr}")
+
+    except Exception as e:
+        messages.error(request, f"Помилка запуску симуляції аномального прогнозу: {str(e)}")
 
     return redirect('scheduler_status')

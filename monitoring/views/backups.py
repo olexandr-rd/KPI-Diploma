@@ -1,6 +1,6 @@
 # monitoring/views/backups.py
 from django.contrib import messages
-from django.shortcuts import render, get_object_or_404
+from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.db.models import Q
@@ -8,6 +8,7 @@ from datetime import datetime, timedelta
 
 from django.utils import timezone
 
+from . import get_stats
 from ..models import BackupLog, UserProfile, SystemSettings, EnergyLog
 
 
@@ -81,6 +82,7 @@ def backups_list(request):
         'reasons': reasons,
     })
 
+
 @login_required
 def run_simulation(request):
     """Run data simulation with model application"""
@@ -121,9 +123,79 @@ def run_simulation(request):
         except Exception as e:
             print(f"Error running simulation: {e}")
 
-    # Return updated logs
-    logs = EnergyLog.objects.all().order_by('-timestamp')[:15]
-    return render(request, 'dashboard/partials/logs_table.html', {'logs': logs})
+    # Check if the request was made with HTMX
+    if request.headers.get('HX-Request'):
+        # Return both logs and stats to update both sections
+        logs = EnergyLog.objects.all().order_by('-timestamp')[:15]
+        stats = get_stats()  # Import this from dashboard.py
+        context = {
+            'logs': logs,
+            'stats': stats,
+        }
+
+        # Return all sections that should be updated
+        response = render(request, 'dashboard/partials/logs_table.html', context)
+        response['HX-Trigger'] = 'statsUpdated'  # This will trigger other updates
+        return response
+    else:
+        # For non-HTMX requests, redirect to dashboard
+        return redirect('dashboard')
+
+
+@login_required
+def force_backup(request):
+    """Force a manual backup without creating new data"""
+    if request.method == 'POST':
+        try:
+            from django.contrib import messages
+            # Check if user has manager or admin role
+            try:
+                profile = request.user.profile
+                if not profile.is_manager:
+                    messages.error(request, "У вас немає прав для створення резервних копій.")
+                    backups = BackupLog.objects.all().order_by('-timestamp')[:5]
+                    return render(request, 'dashboard/partials/backups_table.html', {'backups': backups})
+            except UserProfile.DoesNotExist:
+                messages.error(request, "У вас немає профілю користувача.")
+                backups = BackupLog.objects.all().order_by('-timestamp')[:5]
+                return render(request, 'dashboard/partials/backups_table.html', {'backups': backups})
+
+            # Get the latest record
+            latest_record = EnergyLog.objects.latest('timestamp')
+
+            print(f"Forcing backup for latest record ID: {latest_record.id}")
+
+            # Import backup function directly
+            from ml.backup_database import backup_database
+
+            # Force backup of the latest record
+            backup_performed = backup_database(latest_record.id, force=True)
+
+            if backup_performed:
+                print("Backup completed successfully")
+            else:
+                print("Backup failed")
+
+        except Exception as e:
+            print(f"Error forcing backup: {e}")
+
+    # Check if the request was made with HTMX
+    if request.headers.get('HX-Request'):
+        # Return both backups and stats to update both sections
+        backups = BackupLog.objects.all().order_by('-timestamp')[:5]
+        stats = get_stats()  # Import this from dashboard.py
+        context = {
+            'backups': backups,
+            'stats': stats,
+        }
+
+        # Return all sections that should be updated
+        response = render(request, 'dashboard/partials/backups_table.html', context)
+        response['HX-Trigger'] = 'statsUpdated'  # This will trigger other updates
+        return response
+    else:
+        # For non-HTMX requests, redirect to dashboard
+        return redirect('dashboard')
 
 
 @login_required

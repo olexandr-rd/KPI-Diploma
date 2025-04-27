@@ -15,6 +15,7 @@ class SystemSettingsForm(forms.ModelForm):
     class Meta:
         model = SystemSettings
         fields = [
+            'data_collection_interval',
             'backup_frequency_hours',
             'backup_retention_days',
             'max_backups',
@@ -23,12 +24,13 @@ class SystemSettingsForm(forms.ModelForm):
             'max_energy_logs'
         ]
         widgets = {
-            'backup_frequency_hours': forms.NumberInput(attrs={'class': 'form-control'}),
-            'backup_retention_days': forms.NumberInput(attrs={'class': 'form-control'}),
-            'max_backups': forms.NumberInput(attrs={'class': 'form-control'}),
-            'min_load_threshold': forms.NumberInput(attrs={'class': 'form-control'}),
-            'max_load_threshold': forms.NumberInput(attrs={'class': 'form-control'}),
-            'max_energy_logs': forms.NumberInput(attrs={'class': 'form-control'}),
+            'data_collection_interval': forms.NumberInput(attrs={'class': 'form-control', 'min': '1', 'max': '60'}),
+            'backup_frequency_hours': forms.NumberInput(attrs={'class': 'form-control', 'min': '1', 'max': '168'}),
+            'backup_retention_days': forms.NumberInput(attrs={'class': 'form-control', 'min': '1', 'max': '365'}),
+            'max_backups': forms.NumberInput(attrs={'class': 'form-control', 'min': '1', 'max': '100'}),
+            'min_load_threshold': forms.NumberInput(attrs={'class': 'form-control', 'min': '0', 'max': '5000'}),
+            'max_load_threshold': forms.NumberInput(attrs={'class': 'form-control', 'min': '0', 'max': '5000'}),
+            'max_energy_logs': forms.NumberInput(attrs={'class': 'form-control', 'min': '100', 'max': '50000'}),
         }
 
 

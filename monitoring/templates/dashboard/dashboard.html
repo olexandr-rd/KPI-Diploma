@@ -13,7 +13,6 @@
     </div>
 
     <!-- Alert for scheduler status -->
-{#{{ stats.scheduler_active }}#}
     {% if not stats.scheduler_active %}
     <div class="alert alert-warning">
         <i class="bi bi-exclamation-triangle-fill me-2"></i> <strong>Увага!</strong> Планувальник не запущено.
@@ -25,7 +24,7 @@
     {% endif %}
 
     <!-- Stats Cards -->
-    <div class="row g-3 mb-4" id="stats-container" hx-get="{% url 'stats_partial' %}" hx-trigger="load, every 60s">
+    <div class="row g-3 mb-4" id="stats-container" hx-get="{% url 'stats_partial' %}" hx-trigger="load, every 60s, statsUpdated from:body">
         {% include 'dashboard/partials/stats.html' %}
     </div>
 
@@ -44,14 +43,15 @@
                         <button class="btn btn-sm btn-primary ms-2"
                                 hx-post="{% url 'run_simulation' %}"
                                 hx-target="#logs-container"
-                                hx-indicator="#logs-indicator">
+                                hx-indicator="#logs-indicator"
+                                hx-swap="innerHTML">
                             <i class="bi bi-lightning-charge"></i> Створити запис
                             <span class="htmx-indicator spinner-border spinner-border-sm text-light" id="logs-indicator" role="status"></span>
                         </button>
                         {% endif %}
                     </div>
                 </div>
-                <div class="card-body p-0" id="logs-container">
+                <div class="card-body p-0" id="logs-container" hx-trigger="logsUpdated from:body">
                     {% include 'dashboard/partials/logs_table.html' %}
                 </div>
             </div>
@@ -117,14 +117,15 @@
                         <button class="btn btn-sm btn-primary ms-2"
                                 hx-post="{% url 'force_backup' %}"
                                 hx-target="#backups-container"
-                                hx-indicator="#backups-indicator">
+                                hx-indicator="#backups-indicator"
+                                hx-swap="innerHTML">
                             <i class="bi bi-cloud-arrow-up"></i> Створити резервну копію
                             <span class="htmx-indicator spinner-border spinner-border-sm text-light" id="backups-indicator" role="status"></span>
                         </button>
                         {% endif %}
                     </div>
                 </div>
-                <div class="card-body p-0" id="backups-container">
+                <div class="card-body p-0" id="backups-container" hx-trigger="backupsUpdated from:body">
                     {% include 'dashboard/partials/backups_table.html' %}
                 </div>
             </div>
@@ -154,11 +155,32 @@
 <script>
     document.addEventListener('DOMContentLoaded', function() {
         // Load trend chart
+        loadTrendChart();
+
+        // Setup HTMX event listeners for dynamic updates
+        document.body.addEventListener('statsUpdated', function(event) {
+            // Update logs and backups when stats are updated
+            htmx.trigger('#logs-container', 'logsUpdated');
+            htmx.trigger('#backups-container', 'backupsUpdated');
+
+            // Reload chart data
+            loadTrendChart();
+        });
+    });
+
+    function loadTrendChart() {
         fetch('{% url "load_trend_chart" %}?period=week')
             .then(response => response.json())
             .then(data => {
-                const ctx = document.getElementById('loadTrendChart').getContext('2d');
-                new Chart(ctx, {
+                // Destroy existing chart if it exists
+                const chartCanvas = document.getElementById('loadTrendChart');
+                if (chartCanvas.__chart) {
+                    chartCanvas.__chart.destroy();
+                }
+
+                // Create new chart
+                const ctx = chartCanvas.getContext('2d');
+                const chart = new Chart(ctx, {
                     type: 'line',
                     data: {
                         labels: data.labels,
@@ -192,8 +214,11 @@
                         }
                     }
                 });
+
+                // Store chart instance for later
+                chartCanvas.__chart = chart;
             })
             .catch(error => console.error('Error loading chart data:', error));
-    });
+    }
 </script>
 {% endblock %}
