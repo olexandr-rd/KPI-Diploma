@@ -85,7 +85,7 @@ def cleanup_old_backups():
         backup_files = list(Path(backups_dir).glob("*.sql"))
 
         # Remove files older than retention_days
-        cutoff_date = timezone.now() - timedelta(days=retention_days)
+        cutoff_date = datetime.now() - timedelta(days=retention_days)
         old_files = []
 
         for file_path in backup_files:

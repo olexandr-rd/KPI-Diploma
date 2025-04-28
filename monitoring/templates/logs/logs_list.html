@@ -152,9 +152,9 @@
                             <th>Прогнозоване (Вт)</th>
                             <th>Тип</th>
                             <th>Аномалія</th>
-                            <th>Пояснення</th>
+                            <th>Пояснення аномалії</th>
                             <th>Резервна копія</th>
-                            <th>Дії</th>
+                            <th>Деталі</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -185,10 +185,8 @@
                                     {% else %}
                                         <span class="text-danger">{{ log.get_anomaly_description }}</span>
                                     {% endif %}
-                                {% elif log.anomaly_score %}
-                                    {{ log.anomaly_score|floatformat:2 }}
                                 {% else %}
-                                    -
+                                    Не виявлено
                                 {% endif %}
                             </td>
                             <td>

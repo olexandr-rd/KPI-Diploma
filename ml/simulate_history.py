@@ -1,8 +1,10 @@
 import os
 import django
 import numpy as np
-from datetime import timedelta
+from datetime import timedelta, datetime
 from django.utils import timezone
+
+# from ml.apply_models_to_record import apply_models_to_record
 
 # Django setup
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'Diploma.settings')
@@ -14,13 +16,13 @@ from monitoring.models import EnergyLog
 EnergyLog.objects.all().delete()
 
 # Simulation parameters
-days = 30
-entries_per_day = 96  # 15-minute intervals
-start_time = timezone.now() - timedelta(days=days)
+days = 90
+entries_per_day = 24 # 60-minute intervals
+start_time = datetime.now() - timedelta(days=days)
 num_entries = days * entries_per_day
 
 for i in range(num_entries):
-    timestamp = start_time + timedelta(minutes=15 * i)
+    timestamp = start_time + timedelta(minutes=60 * i)
 
     # Simulated inverter data
     ac_output_voltage = np.random.normal(230, 5)
@@ -31,12 +33,13 @@ for i in range(num_entries):
 
     # Save to DB
     EnergyLog.objects.create(
-        timestamp=timestamp,
+        timestamp=timezone.make_aware(timestamp),
         ac_output_voltage=ac_output_voltage,
         dc_battery_voltage=dc_battery_voltage,
         dc_battery_current=dc_battery_current,
         load_power=load_power,
         temperature=temperature
     )
+    # apply_models_to_record()
 
 print(f"Simulated {num_entries} inverter logs.")

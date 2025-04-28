@@ -1,6 +1,8 @@
 <!-- monitoring/templates/settings/scheduler_status.html -->
 {% extends 'base.html' %}
 
+{% load template_filters %}
+
 {% block title %}Статус планувальника{% endblock %}
 
 {% block content %}
@@ -78,7 +80,7 @@
                                     </div>
                                     <div class="small text-muted">
                                         {% if scheduler.is_running %}
-                                            Запущено {{ scheduler.uptime|timesince }} тому
+                                            Запущено {{ scheduler.uptime|format_timedelta }} тому
                                         {% else %}
                                             Жодних активних задач
                                         {% endif %}

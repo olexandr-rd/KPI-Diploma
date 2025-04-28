@@ -56,33 +56,33 @@ def get_anomaly_explanation(features, feature_scores):
     for feature, score in suspicious_features[:2]:  # Top 2 contributing features
         if feature == 'ac_output_voltage':
             if features['ac_output_voltage'].values[0] < 210:
-                explanations.append(f"Надто низька вихідна напруга ({features['ac_output_voltage'].values[0]:.1f}В)")
+                explanations.append(f"Надто низька вихідна напруга")
             elif features['ac_output_voltage'].values[0] > 250:
-                explanations.append(f"Надто висока вихідна напруга ({features['ac_output_voltage'].values[0]:.1f}В)")
+                explanations.append(f"Надто висока вихідна напруга")
 
         elif feature == 'dc_battery_voltage':
             if features['dc_battery_voltage'].values[0] < 22:
-                explanations.append(f"Критично низький заряд батареї ({features['dc_battery_voltage'].values[0]:.1f}В)")
+                explanations.append(f"Критично низький заряд батареї")
             elif features['dc_battery_voltage'].values[0] > 28:
-                explanations.append(f"Перевищення напруги батареї ({features['dc_battery_voltage'].values[0]:.1f}В)")
+                explanations.append(f"Перевищення напруги батареї")
 
         elif feature == 'dc_battery_current':
             if features['dc_battery_current'].values[0] > 15:
-                explanations.append(f"Високий струм батареї ({features['dc_battery_current'].values[0]:.1f}А)")
+                explanations.append(f"Високий струм батареї")
             elif features['dc_battery_current'].values[0] < 5:
-                explanations.append(f"Низький струм батареї ({features['dc_battery_current'].values[0]:.1f}А)")
+                explanations.append(f"Низький струм батареї")
 
         elif feature == 'load_power':
             if features['load_power'].values[0] < settings.min_load_threshold:
-                explanations.append(f"Критично низьке навантаження ({features['load_power'].values[0]:.1f}Вт)")
+                explanations.append(f"Критично низьке навантаження")
             elif features['load_power'].values[0] > settings.max_load_threshold:
-                explanations.append(f"Перевантаження системи ({features['load_power'].values[0]:.1f}Вт)")
+                explanations.append(f"Перевантаження системи")
 
         elif feature == 'temperature':
             if features['temperature'].values[0] > 45:
-                explanations.append(f"Перегрів системи ({features['temperature'].values[0]:.1f}°C)")
+                explanations.append(f"Перегрів системи")
             elif features['temperature'].values[0] < 10:
-                explanations.append(f"Надто низька температура ({features['temperature'].values[0]:.1f}°C)")
+                explanations.append(f"Надто низька температура")
 
     # If no specific issues found, provide a general explanation
     if not explanations:

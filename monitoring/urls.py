@@ -5,6 +5,7 @@ from .auth import (
     CustomLoginView, CustomLogoutView, RegisterView,
     UserManagementView, UserProfileEditView
 )
+from . import scheduler
 
 urlpatterns = [
     # Authentication URLs
@@ -40,10 +41,10 @@ urlpatterns = [
     path('action/start-scheduler/', views.start_scheduler, name='start_scheduler'),
     path('action/stop-scheduler/', views.stop_scheduler, name='stop_scheduler'),
     path('action/restart-scheduler/', views.restart_scheduler, name='restart_scheduler'),
-    # path('action/run-maintenance/', views.run_maintenance, name='run_maintenance'),
-    # path('action/run-simulation-anomaly/', views.run_simulation_anomaly, name='run_simulation_anomaly'),
-    # path('action/run-simulation-abnormal-prediction/', views.run_simulation_abnormal_prediction,
-    #      name='run_simulation_abnormal_prediction'),
+    path('action/run-maintenance/', scheduler.run_maintenance, name='run_maintenance'),
+    path('action/run-simulation-anomaly/', scheduler.run_simulation_anomaly, name='run_simulation_anomaly'),
+    path('action/run-simulation-abnormal-prediction/', scheduler.run_simulation_abnormal_prediction,
+         name='run_simulation_abnormal_prediction'),
 
     # HTMX chart endpoints for analytics
     path('charts/load-trend/', views.load_trend_chart, name='load_trend_chart'),

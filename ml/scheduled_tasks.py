@@ -8,7 +8,6 @@ import schedule
 import sys
 from pathlib import Path
 from django.utils import timezone
-from monitoring.models import EnergyLog, BackupLog, SystemSettings
 
 # Get the absolute path to the project directory
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -16,6 +15,8 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Django setup
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'Diploma.settings')
 django.setup()
+
+from monitoring.models import EnergyLog, BackupLog, SystemSettings
 
 # Create a logs directory if it doesn't exist
 logs_dir = os.path.join(BASE_DIR, 'logs')

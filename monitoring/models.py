@@ -101,7 +101,7 @@ class EnergyLog(models.Model):
             return "Висока ймовірність"
         elif self.anomaly_score < -0.3:
             return "Середня ймовірність"
-        elif self.anomaly_score < -0.1:
+        elif self.anomaly_score < 0:
             return "Низька ймовірність"
         else:
             return "Норма"

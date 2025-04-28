@@ -4,15 +4,11 @@ from django import forms
 from django.contrib.auth.forms import UserCreationForm, AuthenticationForm
 from django.contrib.auth.models import User
 from django.contrib.auth.views import LoginView, LogoutView
-# from django.contrib.auth.decorators import login_required
-# from django.utils.decorators import method_decorator
-from django.views.generic import CreateView, UpdateView, ListView, DetailView
+from django.views.generic import CreateView, UpdateView, ListView
 from django.urls import reverse_lazy
-from django.shortcuts import redirect, get_object_or_404, render
+from django.shortcuts import redirect
 from django.contrib import messages
 from django.contrib.auth.mixins import UserPassesTestMixin
-# from django.db import transaction
-
 from .models import UserProfile
 
 
@@ -125,7 +121,7 @@ class UserProfileForm(forms.ModelForm):
 
 
 class UserManagementView(UserPassesTestMixin, ListView):
-    """List all users - only for admins"""
+    """List all users except the current one - only for admins"""
     model = User
     template_name = 'auth/user_management.html'
     context_object_name = 'users'
@@ -137,7 +133,8 @@ class UserManagementView(UserPassesTestMixin, ListView):
             return False
 
     def get_queryset(self):
-        return User.objects.all().prefetch_related('profile')
+        # Exclude the current user from the queryset
+        return User.objects.exclude(id=self.request.user.id).prefetch_related('profile')
 
 
 class UserProfileEditView(UserPassesTestMixin, UpdateView):

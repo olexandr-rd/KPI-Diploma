@@ -1,6 +1,8 @@
 <!-- monitoring/templates/logs/log_detail.html -->
 {% extends 'base.html' %}
 
+{% load template_filters %}
+
 {% block title %}Деталі запису #{{ log.id }}{% endblock %}
 
 {% block content %}
@@ -112,7 +114,7 @@
                                             <div class="progress-bar
                                                 {% if log.anomaly_score < -0.5 %}bg-danger
                                                 {% elif log.anomaly_score < -0.3 %}bg-warning
-                                                {% elif log.anomaly_score < -0.1 %}bg-info
+                                                {% elif log.anomaly_score < 0 %}bg-info
                                                 {% else %}bg-success{% endif %}"
                                                 role="progressbar"
                                                 style="width: {{ log.anomaly_score|add:1|div:2|mul:100|floatformat:0 }}%"
@@ -132,8 +134,8 @@
                                             <ul class="mb-0">
                                                 <li><span class="text-danger">Менше -0.5</span>: Висока ймовірність аномалії</li>
                                                 <li><span class="text-warning">-0.5 до -0.3</span>: Середня ймовірність аномалії</li>
-                                                <li><span class="text-info">-0.3 до -0.1</span>: Низька ймовірність аномалії</li>
-                                                <li><span class="text-success">Більше -0.1</span>: Нормальний запис</li>
+                                                <li><span class="text-info">-0.3 до 0</span>: Низька ймовірність аномалії</li>
+                                                <li><span class="text-success">Понад 0</span>: Нормальний запис</li>
                                             </ul>
                                         </p>
                                     </div>

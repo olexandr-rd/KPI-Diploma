@@ -55,7 +55,6 @@
                         <div>
                             <div class="text-muted small">Аномалій виявлено</div>
                             <div class="h3">{{ anomalies_count }}</div>
-                            <div class="small text-danger">{{ anomaly_percentage|floatformat:1 }}% записів</div>
                         </div>
                         <div class="fs-1 text-danger opacity-25">
                             <i class="bi bi-exclamation-triangle"></i>
@@ -222,25 +221,6 @@
                                 </div>
                             </div>
                         </div>
-                    </div>
-
-                    <div class="progress mb-3" style="height: 20px;">
-                        <div class="progress-bar bg-success" role="progressbar"
-                             style="width: {{ backup_success_rate }}%"
-                             aria-valuenow="{{ backup_success_rate }}" aria-valuemin="0" aria-valuemax="100">
-                            Успішно ({{ successful_backups }})
-                        </div>
-                        <div class="progress-bar bg-danger" role="progressbar"
-                             style="width: {{ 100|sub:backup_success_rate }}%"
-                             aria-valuenow="{{ 100|sub:backup_success_rate }}" aria-valuemin="0" aria-valuemax="100">
-                            Невдало ({{ backups_count|sub:successful_backups }})
-                        </div>
-                    </div>
-
-                    <div class="text-center">
-                        <p class="text-muted mb-0">
-                            Аналіз за період: {{ start_date|date:"d.m.Y" }} - {{ end_date|date:"d.m.Y" }}
-                        </p>
                     </div>
                 </div>
             </div>
