@@ -401,23 +401,6 @@ def run_simulation_anomaly(request):
         return redirect('dashboard')
 
     try:
-        # BASE_DIR = Path(__file__).resolve().parent.parent
-        # script_path = os.path.join(BASE_DIR, 'ml', 'scheduled_tasks.py')
-        # python_executable = sys.executable
-        #
-        # # Run anomaly simulation
-        # result = subprocess.run(
-        #     [python_executable, script_path, "anomaly"],
-        #     capture_output=True,
-        #     text=True,
-        #     cwd=str(BASE_DIR)
-        # )
-        #
-        # if result.returncode == 0:
-        #     messages.success(request, "Симуляція аномалії виконана успішно.")
-        # else:
-        #     messages.error(request, f"Помилка виконання симуляції аномалії: {result.stderr}")
-
         from ml.scheduled_tasks import simulate_with_anomaly
         log_id = simulate_with_anomaly(is_manual=True, user_id=request.user.id)
 

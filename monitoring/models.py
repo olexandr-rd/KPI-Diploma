@@ -1,4 +1,5 @@
 # monitoring/models.py - Updated SystemSettings model
+from datetime import datetime
 
 from django.db import models
 from django.contrib.auth.models import User
@@ -37,6 +38,10 @@ class SystemSettings(models.Model):
                                                 help_text="Зберігати резервні копії (днів)")
     max_backups = models.IntegerField(default=20,
                                       help_text="Максимальна кількість резервних копій")
+
+    # Maintenance settings
+    # maintenance_time = models.TimeField(default=datetime.time(0, 0),
+    #                                     help_text="Час виконання щоденного обслуговування")
 
     # Data collection settings
     data_collection_interval = models.IntegerField(default=15,

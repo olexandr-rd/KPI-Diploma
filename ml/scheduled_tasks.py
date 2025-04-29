@@ -23,15 +23,23 @@ logs_dir = os.path.join(BASE_DIR, 'logs')
 os.makedirs(logs_dir, exist_ok=True)
 
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler(os.path.join(logs_dir, 'scheduler.log')),
-        logging.StreamHandler()
-    ]
-)
 logger = logging.getLogger('scheduler')
+if not logger.handlers:
+    logger.setLevel(logging.INFO)
+    formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+
+    # Add file handler
+    file_handler = logging.FileHandler(os.path.join(logs_dir, 'scheduler.log'))
+    file_handler.setFormatter(formatter)
+    logger.addHandler(file_handler)
+
+    # Add console handler
+    console_handler = logging.StreamHandler()
+    console_handler.setFormatter(formatter)
+    logger.addHandler(console_handler)
+
+# Prevent propagation to root logger to avoid duplicated logs
+logger.propagate = False
 
 # Store active jobs for management
 active_jobs = {
