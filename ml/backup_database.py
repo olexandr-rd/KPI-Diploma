@@ -140,7 +140,7 @@ def create_scheduled_backup():
         return False
 
 
-def backup_database(record_id=None, force=False, reason=None):
+def backup_database(record_id=None, force=False, reason=None, user=None):
     """
     Create a backup of the PostgreSQL database if:
     1. Record is anomalous OR
@@ -235,7 +235,8 @@ def backup_database(record_id=None, force=False, reason=None):
                 backup_file=os.path.basename(backup_file),
                 status="SUCCESS",
                 size_kb=file_size_kb,
-                trigger_reason=trigger_reason or "UNKNOWN"
+                trigger_reason=trigger_reason or "UNKNOWN",
+                created_by = user,
             )
 
             # Associate backup with the triggering record
@@ -261,7 +262,8 @@ def backup_database(record_id=None, force=False, reason=None):
                 status="FAILED",
                 size_kb=0,
                 trigger_reason=trigger_reason or "UNKNOWN",
-                error_message=error_msg[:255]  # Truncate if needed
+                error_message=error_msg[:255],  # Truncate if needed
+                created_by=user
             )
 
             # Associate backup with the triggering record
@@ -279,7 +281,8 @@ def backup_database(record_id=None, force=False, reason=None):
                 status="FAILED",
                 size_kb=0,
                 trigger_reason=trigger_reason or "UNKNOWN",
-                error_message=str(e)[:255]  # Truncate if needed
+                error_message=str(e)[:255],  # Truncate if needed
+                created_by=user
             )
 
             # Associate backup with the triggering record

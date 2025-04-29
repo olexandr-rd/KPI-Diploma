@@ -401,22 +401,30 @@ def run_simulation_anomaly(request):
         return redirect('dashboard')
 
     try:
-        BASE_DIR = Path(__file__).resolve().parent.parent
-        script_path = os.path.join(BASE_DIR, 'ml', 'scheduled_tasks.py')
-        python_executable = sys.executable
+        # BASE_DIR = Path(__file__).resolve().parent.parent
+        # script_path = os.path.join(BASE_DIR, 'ml', 'scheduled_tasks.py')
+        # python_executable = sys.executable
+        #
+        # # Run anomaly simulation
+        # result = subprocess.run(
+        #     [python_executable, script_path, "anomaly"],
+        #     capture_output=True,
+        #     text=True,
+        #     cwd=str(BASE_DIR)
+        # )
+        #
+        # if result.returncode == 0:
+        #     messages.success(request, "Симуляція аномалії виконана успішно.")
+        # else:
+        #     messages.error(request, f"Помилка виконання симуляції аномалії: {result.stderr}")
 
-        # Run anomaly simulation
-        result = subprocess.run(
-            [python_executable, script_path, "anomaly"],
-            capture_output=True,
-            text=True,
-            cwd=str(BASE_DIR)
-        )
+        from ml.scheduled_tasks import simulate_with_anomaly
+        log_id = simulate_with_anomaly(is_manual=True, user_id=request.user.id)
 
-        if result.returncode == 0:
-            messages.success(request, "Симуляція аномалії виконана успішно.")
+        if log_id:
+            messages.success(request, f"Симуляція аномалії виконана успішно. ID запису: {log_id}")
         else:
-            messages.error(request, f"Помилка виконання симуляції аномалії: {result.stderr}")
+            messages.error(request, "Помилка виконання симуляції аномалії")
 
     except Exception as e:
         messages.error(request, f"Помилка запуску симуляції аномалії: {str(e)}")
@@ -441,22 +449,13 @@ def run_simulation_abnormal_prediction(request):
         return redirect('dashboard')
 
     try:
-        BASE_DIR = Path(__file__).resolve().parent.parent
-        script_path = os.path.join(BASE_DIR, 'ml', 'scheduled_tasks.py')
-        python_executable = sys.executable
+        from ml.scheduled_tasks import simulate_with_abnormal_prediction
+        log_id = simulate_with_abnormal_prediction(is_manual=True, user_id=request.user.id)
 
-        # Run abnormal prediction simulation
-        result = subprocess.run(
-            [python_executable, script_path, "abnormal_prediction"],
-            capture_output=True,
-            text=True,
-            cwd=str(BASE_DIR)
-        )
-
-        if result.returncode == 0:
-            messages.success(request, "Симуляція аномального прогнозу виконана успішно.")
+        if log_id:
+            messages.success(request, f"Симуляція аномального прогнозу виконана успішно. ID запису: {log_id}")
         else:
-            messages.error(request, f"Помилка виконання симуляції аномального прогнозу: {result.stderr}")
+            messages.error(request, "Помилка виконання симуляції аномального прогнозу")
 
     except Exception as e:
         messages.error(request, f"Помилка запуску симуляції аномального прогнозу: {str(e)}")

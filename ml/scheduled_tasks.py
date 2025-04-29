@@ -261,7 +261,7 @@ def start_scheduler():
             log_schedule()
 
 
-def simulate_with_anomaly():
+def simulate_with_anomaly(is_manual=False, user_id=None):
     """Run data simulation with forced anomaly"""
     logger.info("Running simulation with forced anomaly")
 
@@ -269,8 +269,17 @@ def simulate_with_anomaly():
         from ml.simulate_data import create_energy_reading
         from ml.apply_models_to_record import apply_models_to_record
 
+        # Get user if provided
+        user = None
+        if user_id:
+            try:
+                from django.contrib.auth.models import User
+                user = User.objects.get(id=user_id)
+            except Exception as e:
+                logger.warning(f"Error getting user: {e}")
+
         # Create anomalous data
-        log = create_energy_reading(anomaly=True, abnormal_prediction=False)
+        log = create_energy_reading(anomaly=True, abnormal_prediction=False, is_manual=is_manual, user=user)
         logger.info(f"Created anomalous energy log with ID: {log.id}")
 
         # Apply ML models
@@ -278,9 +287,10 @@ def simulate_with_anomaly():
         logger.info(f"Applied models to record {log.id}")
         logger.info(f"Is anomaly: {is_anomaly}, Score: {anomaly_score}, Predicted next load: {predicted_load}")
 
-        # Ensure backup happens
+        # Perform backup
         from ml.backup_database import backup_database
-        backup_performed = backup_database(log.id)
+        reason = "MANUAL" if is_manual else "PREDICTION"
+        backup_performed = backup_database(log.id, reason=reason, user=user)
         logger.info(f"Backup performed: {backup_performed}")
 
         return log.id
@@ -291,7 +301,7 @@ def simulate_with_anomaly():
         return None
 
 
-def simulate_with_abnormal_prediction():
+def simulate_with_abnormal_prediction(is_manual=False, user_id=None):
     """Run data simulation with abnormal prediction"""
     logger.info("Running simulation with abnormal prediction")
 
@@ -299,8 +309,17 @@ def simulate_with_abnormal_prediction():
         from ml.simulate_data import create_energy_reading
         from ml.apply_models_to_record import apply_models_to_record
 
-        # Create data that will lead to abnormal prediction
-        log = create_energy_reading(anomaly=False, abnormal_prediction=True)
+        # Get user if provided
+        user = None
+        if user_id:
+            try:
+                from django.contrib.auth.models import User
+                user = User.objects.get(id=user_id)
+            except Exception as e:
+                logger.warning(f"Error getting user: {e}")
+
+        # Create data that will lead to abnormal prediction, marking as manual if specified
+        log = create_energy_reading(anomaly=False, abnormal_prediction=True, is_manual=is_manual, user=user)
         logger.info(f"Created log with abnormal prediction potential, ID: {log.id}")
 
         # Apply ML models
@@ -308,14 +327,11 @@ def simulate_with_abnormal_prediction():
         logger.info(f"Applied models to record {log.id}")
         logger.info(f"Is anomaly: {is_anomaly}, Score: {anomaly_score}, Predicted next load: {predicted_load}")
 
-        # Check if prediction is abnormal and backup if needed
-        from ml.backup_database import backup_database, PREDICTED_LOAD_MIN, PREDICTED_LOAD_MAX
-        is_prediction_abnormal = (predicted_load is not None and
-                                  (predicted_load < PREDICTED_LOAD_MIN or predicted_load > PREDICTED_LOAD_MAX))
-
-        if is_prediction_abnormal:
-            backup_performed = backup_database(log.id)
-            logger.info(f"Abnormal prediction detected, backup performed: {backup_performed}")
+        # Perform backup
+        from ml.backup_database import backup_database
+        reason = "MANUAL" if is_manual else "PREDICTION"
+        backup_performed = backup_database(log.id, reason=reason, user=user)
+        logger.info(f"Backup performed: {backup_performed}")
 
         return log.id
     except Exception as e:
