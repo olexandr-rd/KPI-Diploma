@@ -40,8 +40,10 @@ class SystemSettings(models.Model):
                                       help_text="Максимальна кількість резервних копій")
 
     # Maintenance settings
-    # maintenance_time = models.TimeField(default=datetime.time(0, 0),
-    #                                     help_text="Час виконання щоденного обслуговування")
+    maintenance_time = models.TimeField(
+        default=timezone.now().replace(hour=0, minute=0, second=0).time(),
+        help_text="Час виконання щоденного обслуговування (очищення даних)"
+    )
 
     # Data collection settings
     data_collection_interval = models.IntegerField(default=15,

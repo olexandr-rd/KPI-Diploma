@@ -78,6 +78,36 @@
 <div class="col-md-4 col-lg-4">
     <div class="card shadow-sm">
         <div class="card-body p-3">
+            <h6 class="card-title"><i class="bi bi-sliders"></i> Параметри системи</h6>
+            <ul class="list-group list-group-flush small">
+                <li class="list-group-item d-flex justify-content-between align-items-center px-0">
+                    <span><i class="bi bi-stopwatch text-success"></i> Інтервал збору даних</span>
+                    <span class="badge bg-success">{{ stats.data_collection_interval }} хв</span>
+                </li>
+                <li class="list-group-item d-flex justify-content-between align-items-center px-0">
+                    <span><i class="bi bi-clock-history text-primary"></i> Частота резервування</span>
+                    <span class="badge bg-primary">{{ stats.backup_frequency_hours }} год</span>
+                </li>
+                <li class="list-group-item d-flex justify-content-between align-items-center px-0">
+                    <span><i class="bi bi-archive text-success"></i> Максимум записів</span>
+                    <span class="badge bg-success">{{ stats.max_logs_kept }}</span>
+                </li>
+                <li class="list-group-item d-flex justify-content-between align-items-center px-0">
+                    <span><i class="bi bi-server text-info"></i> Максимум резервних копій</span>
+                    <span class="badge bg-info">{{ stats.max_backups_kept }}</span>
+                </li>
+                <li class="list-group-item d-flex justify-content-between align-items-center px-0">
+                    <span><i class="bi bi-tools text-secondary"></i> Час обслуговування</span>
+                    <span class="badge bg-secondary">{{ stats.maintenance_time|time:"H:i" }}</span>
+                </li>
+            </ul>
+        </div>
+    </div>
+</div>
+
+<div class="col-md-4 col-lg-4">
+    <div class="card shadow-sm">
+        <div class="card-body p-3">
             <h6 class="card-title"><i class="bi bi-calendar-event"></i> Розклад</h6>
             <ul class="list-group list-group-flush small">
                 <li class="list-group-item d-flex justify-content-between align-items-center px-0">
@@ -91,32 +121,6 @@
                 <li class="list-group-item d-flex justify-content-between align-items-center px-0">
                     <span><i class="bi bi-gear text-secondary"></i> Наступне обслуговування</span>
                     <span class="badge bg-secondary">{{ stats.next_maintenance|date:"H:i:s, d.m.Y" }}</span>
-                </li>
-            </ul>
-        </div>
-    </div>
-</div>
-
-<div class="col-md-4 col-lg-4">
-    <div class="card shadow-sm">
-        <div class="card-body p-3">
-            <h6 class="card-title"><i class="bi bi-sliders"></i> Параметри системи</h6>
-            <ul class="list-group list-group-flush small">
-                <li class="list-group-item d-flex justify-content-between align-items-center px-0">
-                    <span><i class="bi bi-stopwatch text-success"></i> Інтервал збору даних</span>
-                    <span class="badge bg-success">{{ stats.data_collection_interval }} хвилин</span>
-                </li>
-                <li class="list-group-item d-flex justify-content-between align-items-center px-0">
-                    <span><i class="bi bi-clock-history text-primary"></i> Частота резервування</span>
-                    <span class="badge bg-primary">{{ stats.backup_frequency_hours }} годин</span>
-                </li>
-                <li class="list-group-item d-flex justify-content-between align-items-center px-0">
-                    <span><i class="bi bi-archive text-success"></i> Максимум записів</span>
-                    <span class="badge bg-success">{{ stats.max_logs_kept }}</span>
-                </li>
-                <li class="list-group-item d-flex justify-content-between align-items-center px-0">
-                    <span><i class="bi bi-server text-info"></i> Максимум резервних копій</span>
-                    <span class="badge bg-info">{{ stats.max_backups_kept }}</span>
                 </li>
             </ul>
         </div>

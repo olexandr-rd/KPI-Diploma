@@ -21,7 +21,8 @@ class SystemSettingsForm(forms.ModelForm):
             'max_backups',
             'min_load_threshold',
             'max_load_threshold',
-            'max_energy_logs'
+            'max_energy_logs',
+            'maintenance_time',
         ]
         widgets = {
             'data_collection_interval': forms.NumberInput(attrs={'class': 'form-control', 'min': '1', 'max': '60'}),
@@ -31,6 +32,7 @@ class SystemSettingsForm(forms.ModelForm):
             'min_load_threshold': forms.NumberInput(attrs={'class': 'form-control', 'min': '0', 'max': '5000'}),
             'max_load_threshold': forms.NumberInput(attrs={'class': 'form-control', 'min': '0', 'max': '5000'}),
             'max_energy_logs': forms.NumberInput(attrs={'class': 'form-control', 'min': '100', 'max': '50000'}),
+            'maintenance_time': forms.TimeInput(attrs={'class': 'form-control', 'type': 'time'}),
         }
 
 

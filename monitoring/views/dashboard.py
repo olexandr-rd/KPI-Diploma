@@ -3,7 +3,7 @@
 from django.shortcuts import render
 from django.contrib.auth.decorators import login_required
 import psutil
-import datetime
+from datetime import timedelta
 from django.utils import timezone
 from ..models import EnergyLog, BackupLog, SystemSettings
 
@@ -35,20 +35,36 @@ def get_stats():
     storage_used = sum(b.size_kb for b in BackupLog.objects.filter(status="SUCCESS")) / 1024  # Convert to MB
 
     # Calculate the next scheduled data collection time
-    data_collection_interval = settings.data_collection_interval if hasattr(settings, 'data_collection_interval') else 15
-    minutes_to_add = data_collection_interval - (now.minute % data_collection_interval)
-    next_data_collection = now + datetime.timedelta(minutes=minutes_to_add)
+    data_collection_interval = settings.data_collection_interval if hasattr(settings,
+                                                                            'data_collection_interval') else 15
+
+    # Calculate next aligned data collection time
+    minutes_since_midnight = (now - now.replace(hour=0, minute=0, second=0, microsecond=0)).total_seconds() / 60
+    next_interval = ((minutes_since_midnight // data_collection_interval) + 1) * data_collection_interval
+    minutes_to_add = next_interval - minutes_since_midnight
+    next_data_collection = now + timedelta(minutes=minutes_to_add)
     next_data_collection = next_data_collection.replace(second=0, microsecond=0)
 
-    # Next maintenance at midnight
-    next_maintenance = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    # Next maintenance at specified time
+    maintenance_time = settings.maintenance_time if hasattr(settings, 'maintenance_time') else now.replace(hour=0,
+                                                                                                           minute=0,
+                                                                                                           second=0,
+                                                                                                           microsecond=0).time()
+    next_maintenance = now.replace(hour=maintenance_time.hour, minute=maintenance_time.minute, second=0, microsecond=0)
+    # If maintenance time already passed today, schedule for tomorrow
     if next_maintenance <= now:
-        next_maintenance += datetime.timedelta(days=1)
+        next_maintenance += timedelta(days=1)
 
     # Next scheduled backup
     backup_hours = settings.backup_frequency_hours
     if backup_hours <= 0:
         backup_hours = 24  # Default to daily
+
+    # Calculate next aligned backup time
+    backup_minutes_interval = backup_hours * 60
+    backup_minutes_since_midnight = (now - now.replace(hour=0, minute=0, second=0, microsecond=0)).total_seconds() / 60
+    next_backup_interval = ((backup_minutes_since_midnight // backup_minutes_interval) + 1) * backup_minutes_interval
+    backup_minutes_to_add = next_backup_interval - backup_minutes_since_midnight
 
     # Find the last backup first
     last_backup = BackupLog.objects.filter(
@@ -57,11 +73,18 @@ def get_stats():
     ).order_by('-timestamp').first()
 
     if last_backup:
-        # Calculate next scheduled backup time
-        next_backup = last_backup.timestamp + datetime.timedelta(hours=backup_hours)
+        # Calculate next scheduled backup time (aligned to intervals from midnight)
+        hours_since_last = (now - last_backup.timestamp).total_seconds() / 3600
+        hours_until_next = backup_hours - (hours_since_last % backup_hours)
+        next_backup = now + timedelta(hours=hours_until_next)
+        # Align to the calculated time
+        backup_time = now.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(minutes=next_backup_interval)
+        next_backup = backup_time if backup_time > now else backup_time + timedelta(days=1)
     else:
-        # If no previous scheduled backup, use current time + backup_hours
-        next_backup = now + datetime.timedelta(hours=backup_hours)
+        # If no previous scheduled backup, use aligned time
+        next_backup = now.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(minutes=next_backup_interval)
+        if next_backup < now:
+            next_backup += timedelta(days=1)
 
     # Check if scheduler is running
     scheduler_active = False
@@ -105,10 +128,10 @@ def get_stats():
         'manual_count': manual_count,
         'auto_count': auto_count,
         'data_collection_interval': data_collection_interval,
+        'maintenance_time': maintenance_time,
     }
 
     return stats
-
 
 @login_required
 def dashboard(request):

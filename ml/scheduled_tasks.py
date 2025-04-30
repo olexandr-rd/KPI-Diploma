@@ -24,19 +24,22 @@ os.makedirs(logs_dir, exist_ok=True)
 
 # Configure logging
 logger = logging.getLogger('scheduler')
-if not logger.handlers:
-    logger.setLevel(logging.INFO)
-    formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+# Clear any existing handlers to prevent duplication
+if logger.handlers:
+    logger.handlers = []
 
-    # Add file handler
-    file_handler = logging.FileHandler(os.path.join(logs_dir, 'scheduler.log'))
-    file_handler.setFormatter(formatter)
-    logger.addHandler(file_handler)
+logger.setLevel(logging.INFO)
+formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
 
-    # Add console handler
-    console_handler = logging.StreamHandler()
-    console_handler.setFormatter(formatter)
-    logger.addHandler(console_handler)
+# Add file handler
+file_handler = logging.FileHandler(os.path.join(logs_dir, 'scheduler.log'))
+file_handler.setFormatter(formatter)
+logger.addHandler(file_handler)
+
+# Add console handler
+console_handler = logging.StreamHandler()
+console_handler.setFormatter(formatter)
+logger.addHandler(console_handler)
 
 # Prevent propagation to root logger to avoid duplicated logs
 logger.propagate = False
@@ -178,6 +181,38 @@ def run_maintenance():
     logger.info("Maintenance tasks completed")
 
 
+def get_aligned_schedule_times(interval_minutes):
+    """Generate aligned schedule times for a given interval"""
+    times = []
+    current_minutes = 0
+
+    while current_minutes < 24 * 60:  # 24 hours in minutes
+        hour = current_minutes // 60
+        minute = current_minutes % 60
+        times.append(f"{hour:02d}:{minute:02d}")
+        current_minutes += interval_minutes
+
+    return times
+
+
+def get_next_aligned_time(interval_minutes):
+    """Get the next aligned time for a given interval"""
+    now = timezone.now()
+
+    # Calculate minutes since midnight
+    midnight = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    minutes_since_midnight = int((now - midnight).total_seconds() / 60)
+
+    # Find the next aligned time
+    next_minutes = ((minutes_since_midnight // interval_minutes) + 1) * interval_minutes
+
+    # Format as "HH:MM"
+    next_hour = (next_minutes // 60) % 24  # Ensure it wraps around for next day
+    next_minute = next_minutes % 60
+
+    return f"{next_hour:02d}:{next_minute:02d}"
+
+
 def update_schedule():
     """Update the schedule based on system settings"""
     global active_jobs
@@ -189,22 +224,54 @@ def update_schedule():
     # Get current settings
     settings = get_system_settings()
 
-    # Schedule data simulation based on interval setting
+    # ===== DATA COLLECTION SCHEDULING =====
     interval_minutes = settings.data_collection_interval
-    logger.info(f"Setting data collection interval to {interval_minutes} minutes")
-    active_jobs['data_simulation'] = schedule.every(interval_minutes).minutes.do(run_data_simulation)
+    if interval_minutes <= 0:
+        interval_minutes = 15  # Default to 15 minutes if invalid
 
-    # Schedule daily backup based on settings
+    # Generate all aligned times for the day
+    data_collection_times = get_aligned_schedule_times(interval_minutes)
+
+    logger.info(f"Setting data collection interval to {interval_minutes} minutes")
+    logger.info(
+        f"Data collection will run at: {', '.join(data_collection_times[:4])}... (every {interval_minutes} min)")
+
+    # Schedule data collection at each aligned time
+    for time_str in data_collection_times:
+        schedule.every().day.at(time_str).do(run_data_simulation)
+
+    next_run_time = get_next_aligned_time(interval_minutes)
+    logger.info(f"Next data collection at: {next_run_time}")
+
+    # ===== BACKUP SCHEDULING =====
     backup_hours = settings.backup_frequency_hours
     if backup_hours <= 0:
         backup_hours = 24  # Default to daily if invalid
 
-    logger.info(f"Setting backup frequency to {backup_hours} hours")
-    active_jobs['backup'] = schedule.every(backup_hours).hours.do(run_scheduled_backup)
+    backup_interval_minutes = backup_hours * 60
+    backup_times = get_aligned_schedule_times(backup_interval_minutes)
 
-    # Schedule maintenance tasks once a day (at midnight)
-    logger.info("Scheduling daily maintenance at midnight")
-    active_jobs['maintenance'] = schedule.every().day.at("00:00").do(run_maintenance)
+    logger.info(f"Setting backup frequency to {backup_hours} hours")
+    logger.info(f"Backups will run at: {', '.join(backup_times[:4])}...")
+
+    # Schedule backups at each aligned time
+    for time_str in backup_times:
+        schedule.every().day.at(time_str).do(run_scheduled_backup)
+
+    next_backup_time = get_next_aligned_time(backup_interval_minutes)
+    logger.info(f"Next backup at: {next_backup_time}")
+
+    # ===== MAINTENANCE SCHEDULING =====
+    maintenance_time = "00:00"  # Default
+    try:
+        # Get the maintenance time from settings
+        if hasattr(settings, 'maintenance_time') and settings.maintenance_time:
+            maintenance_time = settings.maintenance_time.strftime("%H:%M")
+    except Exception as e:
+        logger.error(f"Error getting maintenance time: {e}")
+
+    logger.info(f"Scheduling daily maintenance at {maintenance_time}")
+    active_jobs['maintenance'] = schedule.every().day.at(maintenance_time).do(run_maintenance)
 
     # Log schedule
     log_schedule()
@@ -231,14 +298,6 @@ def start_scheduler():
     # Set up initial schedule
     update_schedule()
 
-    # Run initial data simulation immediately
-    logger.info("Running initial data simulation")
-    run_data_simulation()
-
-    # Run initial maintenance
-    logger.info("Running initial maintenance")
-    run_maintenance()
-
     # Create a flag file to indicate the scheduler is running
     with open(os.path.join(logs_dir, 'scheduler.pid'), 'w') as f:
         f.write(str(os.getpid()))
@@ -249,24 +308,30 @@ def start_scheduler():
     settings_check_interval = 5 * 60  # Check settings every 5 minutes
 
     while True:
-        n_jobs = len(schedule.jobs)
-        logger.info(f"Checking scheduled jobs ({n_jobs} jobs in queue)")
+        try:
+            n_jobs = len(schedule.jobs)
+            if n_jobs > 0:
+                logger.info(f"Checking scheduled jobs ({n_jobs} jobs in queue)")
+                schedule.run_pending()
+            else:
+                logger.warning("No scheduled jobs found! Re-configuring schedule...")
+                update_schedule()
 
-        schedule.run_pending()
+            # Sleep for a shorter interval to be more responsive
+            time.sleep(30)
 
-        # Sleep for a shorter interval to be more responsive
-        time.sleep(30)
-
-        # Periodically check if settings have changed (every 5 minutes)
-        current_time = time.time()
-        if current_time - last_settings_check > settings_check_interval:
-            logger.info("Checking for settings changes...")
-            update_schedule()
-            last_settings_check = current_time
-
-        # Periodically log schedule information (once every hour, on the hour)
-        if timezone.now().minute < 1 and timezone.now().second < 30:
-            log_schedule()
+            # Periodically check if settings have changed (every 5 minutes)
+            current_time = time.time()
+            if current_time - last_settings_check > settings_check_interval:
+                logger.info("Checking for settings changes...")
+                update_schedule()
+                last_settings_check = current_time
+        except Exception as e:
+            logger.error(f"Error in scheduler loop: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+            # Sleep briefly before continuing
+            time.sleep(5)
 
 
 def simulate_with_anomaly(is_manual=False, user_id=None):

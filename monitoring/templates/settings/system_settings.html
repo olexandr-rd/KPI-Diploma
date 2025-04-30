@@ -92,6 +92,24 @@
                         </div>
 
                         <hr>
+                        <h6 class="text-primary mb-3">Налаштування обслуговування</h6>
+
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                <label for="{{ form.maintenance_time.id_for_label }}" class="form-label">
+                                    Час виконання обслуговування
+                                </label>
+                                {{ form.maintenance_time }}
+                                {% if form.maintenance_time.errors %}
+                                    <div class="text-danger small">{{ form.maintenance_time.errors }}</div>
+                                {% endif %}
+                                <div class="form-text small text-muted">
+                                    Час очищення старих даних і резервних копій
+                                </div>
+                            </div>
+                        </div>
+
+                        <hr>
                         <h6 class="text-primary mb-3">Порогові значення навантаження</h6>
 
                         <div class="row mb-3">
