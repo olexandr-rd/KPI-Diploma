@@ -6,6 +6,7 @@ import logging
 import time
 import schedule
 import sys
+import functools
 from pathlib import Path
 from django.utils import timezone
 
@@ -51,6 +52,16 @@ active_jobs = {
     'maintenance': None
 }
 
+# Global job queue with priorities
+job_priorities = {
+    'run_data_simulation': 1,  # Highest priority
+    'run_scheduled_backup': 2,
+    'run_maintenance': 3  # Lowest priority
+}
+
+# Track if a job is currently running
+job_running = None
+
 
 def get_system_settings():
     """Get or create system settings"""
@@ -66,6 +77,39 @@ def get_system_settings():
             'max_backups': 20,
             'data_collection_interval': 15,
         })
+
+
+def prioritized_job_wrapper(func):
+    """Decorator to handle job prioritization"""
+
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        global job_running
+
+        # Get the name of the current function
+        func_name = func.__name__
+
+        # Log that we're starting this job
+        logger.info(f"Starting job: {func_name}")
+
+        # Set the currently running job
+        job_running = func_name
+
+        try:
+            # Run the actual job function
+            result = func(*args, **kwargs)
+            logger.info(f"Completed job: {func_name}")
+            return result
+        except Exception as e:
+            logger.error(f"Error in job {func_name}: {str(e)}")
+            import traceback
+            logger.error(traceback.format_exc())
+            return None
+        finally:
+            # Clear the running job marker
+            job_running = None
+
+    return wrapper
 
 
 def run_data_simulation():
@@ -173,16 +217,71 @@ def purge_old_energy_logs():
         logger.error(f"Exception during energy log purge: {str(e)}")
 
 
+def rotate_logs():
+    """Keep logs from growing too large by rotating them"""
+    logger.info("Rotating log files")
+
+    try:
+        # Rotate scheduler log
+        scheduler_log = os.path.join(logs_dir, 'scheduler.log')
+        if os.path.exists(scheduler_log):
+            # Check file size in MB
+            size_mb = os.path.getsize(scheduler_log) / (1024 * 1024)
+
+            if size_mb > 5:  # Rotate if larger than 5MB
+                # Backup the current log
+                timestamp = timezone.now().strftime('%Y%m%d_%H%M%S')
+                backup_log = os.path.join(logs_dir, f'scheduler_{timestamp}.log')
+
+                # Move current log to backup
+                os.rename(scheduler_log, backup_log)
+
+                # Create a new empty log file
+                with open(scheduler_log, 'w') as f:
+                    f.write(f"Log rotated at {timezone.now()} - Previous log saved as {os.path.basename(backup_log)}\n")
+
+                logger.info(f"Rotated scheduler log (was {size_mb:.2f}MB)")
+
+                # Delete older log files (keep last 5)
+                old_logs = sorted([f for f in os.listdir(logs_dir) if f.startswith('scheduler_')], reverse=True)
+                if len(old_logs) > 5:
+                    for old_log in old_logs[5:]:
+                        try:
+                            os.remove(os.path.join(logs_dir, old_log))
+                            logger.info(f"Deleted old log file: {old_log}")
+                        except Exception as e:
+                            logger.error(f"Error deleting old log {old_log}: {e}")
+
+    except Exception as e:
+        logger.error(f"Error during log rotation: {e}")
+
+
 def run_maintenance():
     """Run all maintenance tasks"""
     logger.info("Running maintenance tasks")
+
+    # Rotate logs before other maintenance tasks
+    rotate_logs()
+
+    # Run database maintenance
     cleanup_old_backups()
     purge_old_energy_logs()
+
     logger.info("Maintenance tasks completed")
 
 
+# Apply the wrapper to the job functions
+run_data_simulation = prioritized_job_wrapper(run_data_simulation)
+run_scheduled_backup = prioritized_job_wrapper(run_scheduled_backup)
+run_maintenance = prioritized_job_wrapper(run_maintenance)
+
+
 def get_aligned_schedule_times(interval_minutes):
-    """Generate aligned schedule times for a given interval"""
+    """
+    Generate aligned schedule times for a given interval
+
+    For example, if interval is 15 minutes, this generates: 00:00, 00:15, 00:30, 00:45, 01:00, etc.
+    """
     times = []
     current_minutes = 0
 
@@ -266,7 +365,14 @@ def update_schedule():
     try:
         # Get the maintenance time from settings
         if hasattr(settings, 'maintenance_time') and settings.maintenance_time:
-            maintenance_time = settings.maintenance_time.strftime("%H:%M")
+            # Get time in the correct timezone
+            local_time = timezone.localtime(timezone.now())
+            settings_time = settings.maintenance_time
+
+            # Format as "HH:MM" in correct timezone
+            maintenance_time = f"{settings_time.hour:02d}:{settings_time.minute:02d}"
+
+            logger.info(f"Using maintenance time from settings: {maintenance_time}")
     except Exception as e:
         logger.error(f"Error getting maintenance time: {e}")
 
@@ -280,13 +386,70 @@ def update_schedule():
 def log_schedule():
     """Log current schedule information"""
     logger.info("Current schedule:")
+
+    # Check if we have jobs scheduled
+    if not schedule.jobs:
+        logger.warning("No jobs are currently scheduled!")
+        return
+
+    # Log all scheduled jobs
     for job in schedule.jobs:
-        next_run = timezone.make_aware(job.next_run)
+        job_name = job.job_func.__name__
+
+        # Get next run time
+        next_run = job.next_run
         if next_run:
-            time_until = (next_run - timezone.now()).total_seconds() / 60
-            logger.info(f"- Job {job.job_func.__name__} will run in {time_until:.1f} minutes")
+            # Convert to timezone-aware time
+            if timezone.is_naive(next_run):
+                next_run = timezone.make_aware(next_run)
+
+            now = timezone.now()
+            time_until = (next_run - now).total_seconds() / 60
+
+            # Format as human-readable
+            next_run_str = next_run.strftime("%Y-%m-%d %H:%M:%S")
+
+            logger.info(f"- Job {job_name} will run at {next_run_str} ({time_until:.1f} minutes from now)")
         else:
-            logger.info(f"- Job {job.job_func.__name__} has no next run time")
+            logger.warning(f"- Job {job_name} has no next run time set!")
+
+
+def run_pending_jobs():
+    """Run pending jobs with priority handling"""
+    global job_running
+
+    # If a job is already running, don't start another
+    if job_running:
+        logger.info(f"Job {job_running} is already running, deferring other jobs")
+        return
+
+    # Get all jobs that are due to run
+    pending_jobs = []
+
+    for job in schedule.jobs:
+        if job.should_run:
+            # Add to pending list with priority
+            priority = job_priorities.get(job.job_func.__name__, 99)  # Default to low priority
+            pending_jobs.append((priority, job))
+
+    # No jobs to run
+    if not pending_jobs:
+        return
+
+    # Sort by priority (lower number = higher priority)
+    pending_jobs.sort(key=lambda x: x[0])
+
+    # Run only the highest priority job
+    _, job_to_run = pending_jobs[0]
+
+    # Run the job
+    logger.info(
+        f"Running job {job_to_run.job_func.__name__} (priority {job_priorities.get(job_to_run.job_func.__name__, 99)})")
+    job_to_run.run()
+
+    # Update the job's next run time
+    schedule.jobs = [job for job in schedule.jobs if job != job_to_run]
+    schedule.jobs.append(job_to_run)
 
 
 def start_scheduler():
@@ -312,7 +475,8 @@ def start_scheduler():
             n_jobs = len(schedule.jobs)
             if n_jobs > 0:
                 logger.info(f"Checking scheduled jobs ({n_jobs} jobs in queue)")
-                schedule.run_pending()
+                # Use our custom function instead of schedule.run_pending()
+                run_pending_jobs()
             else:
                 logger.warning("No scheduled jobs found! Re-configuring schedule...")
                 update_schedule()

@@ -3,7 +3,7 @@
 from django.shortcuts import render
 from django.contrib.auth.decorators import login_required
 import psutil
-from datetime import timedelta
+from datetime import timedelta, datetime
 from django.utils import timezone
 from ..models import EnergyLog, BackupLog, SystemSettings
 
@@ -50,9 +50,12 @@ def get_stats():
                                                                                                            minute=0,
                                                                                                            second=0,
                                                                                                            microsecond=0).time()
-    next_maintenance = now.replace(hour=maintenance_time.hour, minute=maintenance_time.minute, second=0, microsecond=0)
-    # If maintenance time already passed today, schedule for tomorrow
-    if next_maintenance <= now:
+
+    # Create a timezone-aware datetime for today at the maintenance time
+    next_maintenance = timezone.make_aware(datetime.combine(now.date(), maintenance_time))
+
+    # If that time is already past today, schedule for tomorrow
+    if next_maintenance < now:
         next_maintenance += timedelta(days=1)
 
     # Next scheduled backup
@@ -132,6 +135,7 @@ def get_stats():
     }
 
     return stats
+
 
 @login_required
 def dashboard(request):

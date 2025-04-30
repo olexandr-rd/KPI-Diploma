@@ -83,20 +83,27 @@ def cleanup_old_backups():
     try:
         # Get all backup files
         backup_files = list(Path(backups_dir).glob("*.sql"))
+        logger.info(f"Found {len(backup_files)} backup files")
 
         # Remove files older than retention_days
         cutoff_date = datetime.now() - timedelta(days=retention_days)
         old_files = []
 
         for file_path in backup_files:
-            file_mtime = datetime.fromtimestamp(file_path.stat().st_mtime)
-            if file_mtime < cutoff_date:
-                old_files.append(file_path)
+            try:
+                file_mtime = datetime.fromtimestamp(file_path.stat().st_mtime)
+                if file_mtime < cutoff_date:
+                    old_files.append(file_path)
+            except Exception as e:
+                logger.error(f"Error checking file {file_path}: {e}")
 
         # Delete old files
+        logger.info(f"Found {len(old_files)} files older than {retention_days} days")
         for file_path in old_files:
             try:
+                logger.info(f"Deleting old backup: {file_path.name}")
                 file_path.unlink()
+                # Also delete from database
                 BackupLog.objects.filter(backup_file=file_path.name).delete()
                 logger.info(f"Deleted old backup older than {retention_days} days: {file_path.name}")
             except Exception as e:
@@ -111,10 +118,14 @@ def cleanup_old_backups():
             # Select files to delete
             files_to_delete = backup_files[:(len(backup_files) - max_backups)]
 
+            logger.info(f"Need to delete {len(files_to_delete)} files to respect max_backups limit of {max_backups}")
+
             # Delete the files
             for file_path in files_to_delete:
                 try:
+                    logger.info(f"Deleting backup (exceeding max count): {file_path.name}")
                     file_path.unlink()
+                    # Also delete from database
                     BackupLog.objects.filter(backup_file=file_path.name).delete()
                     logger.info(f"Deleted old backup exceeding count limit: {file_path.name}")
                 except Exception as e:
@@ -122,6 +133,8 @@ def cleanup_old_backups():
 
     except Exception as e:
         logger.error(f"Exception during backup cleanup: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
 
 
 def create_scheduled_backup():
@@ -152,6 +165,7 @@ def backup_database(record_id=None, force=False, reason=None, user=None):
         record_id: ID of record to check, or None for latest
         force: Force backup regardless of anomaly status
         reason: Optional specific reason for backup
+        user: User who initiated the backup
 
     Returns:
         bool: True if backup was performed
@@ -202,6 +216,27 @@ def backup_database(record_id=None, force=False, reason=None, user=None):
     # Create backup filename with timestamp
     timestamp = timezone.now().strftime('%Y%m%d_%H%M%S')
     backup_file = os.path.join(backups_dir, f"energy_data_{timestamp}.sql")
+    backup_filename = os.path.basename(backup_file)
+
+    # Check if a backup log with this filename already exists (prevent duplicates)
+    existing_backup = BackupLog.objects.filter(backup_file=backup_filename).first()
+    if existing_backup:
+        logger.warning(f"Backup log for {backup_filename} already exists (ID: {existing_backup.id})")
+
+        # If it's successful, just return True to indicate backup was done
+        if existing_backup.status == "SUCCESS":
+            # Just ensure the record is associated with this backup
+            if record not in existing_backup.triggered_by.all():
+                existing_backup.triggered_by.add(record)
+                # Mark record as backed up if not already
+                if not record.backup_triggered:
+                    record.backup_triggered = True
+                    record.save()
+                    logger.info(f"Associated record {record.id} with existing backup {existing_backup.id}")
+            return True
+        else:
+            # If previous attempt failed, we'll try again and update the record
+            logger.info(f"Previous backup attempt failed, retrying...")
 
     try:
         # PostgreSQL dump command
@@ -230,14 +265,24 @@ def backup_database(record_id=None, force=False, reason=None, user=None):
             # Get file size in KB
             file_size_kb = os.path.getsize(backup_file) / 1024
 
-            # Create backup log entry
-            backup_log = BackupLog.objects.create(
-                backup_file=os.path.basename(backup_file),
-                status="SUCCESS",
-                size_kb=file_size_kb,
-                trigger_reason=trigger_reason or "UNKNOWN",
-                created_by = user,
-            )
+            # If we have an existing record that failed, update it instead of creating a new one
+            if existing_backup and existing_backup.status != "SUCCESS":
+                existing_backup.status = "SUCCESS"
+                existing_backup.size_kb = file_size_kb
+                existing_backup.error_message = None
+                existing_backup.save()
+                backup_log = existing_backup
+                logger.info(f"Updated existing backup log {existing_backup.id} to SUCCESS")
+            else:
+                # Create new backup log entry
+                backup_log = BackupLog.objects.create(
+                    backup_file=backup_filename,
+                    status="SUCCESS",
+                    size_kb=file_size_kb,
+                    trigger_reason=trigger_reason or "UNKNOWN",
+                    created_by=user,
+                )
+                logger.info(f"Created new backup log with ID {backup_log.id}")
 
             # Associate backup with the triggering record
             backup_log.triggered_by.add(record)
@@ -248,23 +293,32 @@ def backup_database(record_id=None, force=False, reason=None, user=None):
 
             logger.info(f"Marked record {record.id} as backed up")
 
-            # Cleanup after successful backup
-            cleanup_old_backups()
+            # # Cleanup after successful backup
+            # cleanup_old_backups()
 
             return True
         else:
             error_msg = stderr.decode('utf-8')
             logger.error(f"Backup failed: {error_msg}")
 
-            # Create failed backup log entry
-            backup_log = BackupLog.objects.create(
-                backup_file=os.path.basename(backup_file),
-                status="FAILED",
-                size_kb=0,
-                trigger_reason=trigger_reason or "UNKNOWN",
-                error_message=error_msg[:255],  # Truncate if needed
-                created_by=user
-            )
+            # If we have an existing record, update it instead of creating a new one
+            if existing_backup:
+                existing_backup.status = "FAILED"
+                existing_backup.error_message = error_msg[:255]  # Truncate if needed
+                existing_backup.save()
+                backup_log = existing_backup
+                logger.info(f"Updated existing backup log {existing_backup.id} to FAILED")
+            else:
+                # Create failed backup log entry
+                backup_log = BackupLog.objects.create(
+                    backup_file=backup_filename,
+                    status="FAILED",
+                    size_kb=0,
+                    trigger_reason=trigger_reason or "UNKNOWN",
+                    error_message=error_msg[:255],  # Truncate if needed
+                    created_by=user
+                )
+                logger.info(f"Created new FAILED backup log with ID {backup_log.id}")
 
             # Associate backup with the triggering record
             backup_log.triggered_by.add(record)
@@ -274,21 +328,28 @@ def backup_database(record_id=None, force=False, reason=None, user=None):
     except Exception as e:
         logger.error(f"Exception during backup: {str(e)}")
 
-        # Create failed backup log entry
-        try:
-            backup_log = BackupLog.objects.create(
-                backup_file=os.path.basename(backup_file),
-                status="FAILED",
-                size_kb=0,
-                trigger_reason=trigger_reason or "UNKNOWN",
-                error_message=str(e)[:255],  # Truncate if needed
-                created_by=user
-            )
-
-            # Associate backup with the triggering record
-            backup_log.triggered_by.add(record)
-        except Exception as inner_e:
-            logger.error(f"Failed to log backup failure: {str(inner_e)}")
+        # Update existing record if available
+        if existing_backup:
+            existing_backup.status = "FAILED"
+            existing_backup.error_message = str(e)[:255]  # Truncate if needed
+            existing_backup.save()
+            logger.info(f"Updated existing backup log {existing_backup.id} to FAILED")
+        else:
+            # Create failed backup log entry
+            try:
+                backup_log = BackupLog.objects.create(
+                    backup_file=backup_filename,
+                    status="FAILED",
+                    size_kb=0,
+                    trigger_reason=trigger_reason or "UNKNOWN",
+                    error_message=str(e)[:255],  # Truncate if needed
+                    created_by=user
+                )
+                # Associate backup with the triggering record
+                backup_log.triggered_by.add(record)
+                logger.info(f"Created new FAILED backup log with ID {backup_log.id}")
+            except Exception as inner_e:
+                logger.error(f"Failed to log backup failure: {str(inner_e)}")
 
         return False
 
