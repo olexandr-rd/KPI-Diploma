@@ -185,11 +185,17 @@ def backup_database(record_id=None, force=False, reason=None, user=None):
     is_anomalous = record.is_anomaly
     predicted_load_abnormal = False
 
+    # Get current thresholds from settings
+    settings = load_system_settings()
+    min_threshold = settings.min_load_threshold
+    max_threshold = settings.max_load_threshold
+
+    # Check the prediction
     if record.predicted_load is not None:
-        if record.predicted_load < PREDICTED_LOAD_MIN or record.predicted_load > PREDICTED_LOAD_MAX:
+        if record.predicted_load < min_threshold or record.predicted_load > max_threshold:
             predicted_load_abnormal = True
             logger.info(
-                f"Predicted load {record.predicted_load:.2f}W is outside normal range ({PREDICTED_LOAD_MIN}-{PREDICTED_LOAD_MAX}W)")
+                f"Predicted load {record.predicted_load:.2f}W is outside normal range ({min_threshold}-{max_threshold}W)")
 
     # Determine trigger reason in clear priority order
     if force:

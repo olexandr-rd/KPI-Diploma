@@ -140,6 +140,8 @@ def simulate_and_process(is_manual=False, user_id=None):
 
     # Get system settings
     settings = get_system_settings()
+    min_threshold = settings.min_load_threshold
+    max_threshold = settings.max_load_threshold
 
     # Get the user if provided
     user = None
@@ -161,8 +163,8 @@ def simulate_and_process(is_manual=False, user_id=None):
 
         # 3. Check predicted load
         is_prediction_abnormal = (predicted_load is not None and
-                                  (predicted_load < settings.min_load_threshold or
-                                   predicted_load > settings.max_load_threshold))
+                                  (predicted_load < min_threshold or
+                                   predicted_load > max_threshold))
 
         # 4. Determine backup reason
         reason = None

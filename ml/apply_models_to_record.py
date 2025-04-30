@@ -211,6 +211,19 @@ def apply_models_to_record(record_id=None):
     # For the current record, predict what the next load will be
     predicted_next_load = forecast_model.predict(features)[0]
 
+    # Get the thresholds from system settings
+    settings = get_system_settings()
+    min_threshold = settings.min_load_threshold
+    max_threshold = settings.max_load_threshold
+
+    # Log the prediction and thresholds to debug
+    print(f"Predicted next load: {predicted_next_load}, Thresholds: Min={min_threshold}, Max={max_threshold}")
+
+    # Explicitly check if the prediction is outside thresholds
+    is_prediction_abnormal = (predicted_next_load < min_threshold or predicted_next_load > max_threshold)
+    if is_prediction_abnormal:
+        print(f"ABNORMAL PREDICTION DETECTED: {predicted_next_load} is outside range [{min_threshold}-{max_threshold}]")
+
     # Update the current record with the prediction for the NEXT load
     record.predicted_load = predicted_next_load
     record.save()
