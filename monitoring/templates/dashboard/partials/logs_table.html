@@ -1,4 +1,4 @@
-<!-- monitoring/templates/partials/logs_table.html -->
+<!-- monitoring/templates/dashboard/partials/logs_table.html -->
 <div class="table-responsive">
     <table class="table table-hover table-sm mb-0">
         <thead class="table-light">
@@ -13,7 +13,7 @@
         <tbody>
             {% for log in logs %}
             <tr class="{% if log.is_anomaly %}table-danger{% endif %}">
-                <td>{{ log.timestamp }}</td>
+                <td>{{ log.timestamp|date:"H:i, d.m.Y" }}</td>
                 <td>{{ log.load_power|floatformat:2 }}</td>
                 <td>{{ log.predicted_load|default:"–"|floatformat:2 }}</td>
                 <td>

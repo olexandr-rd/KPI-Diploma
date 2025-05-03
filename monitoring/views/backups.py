@@ -84,65 +84,6 @@ def backups_list(request):
 
 
 @login_required
-def run_simulation(request):
-    """Run data simulation with model application"""
-    if request.method == 'POST':
-        try:
-            # Run the simulation directly instead of using subprocess
-            from ml.simulate_data import create_energy_reading, apply_models_to_record
-
-            # Flag as manual and record the user who triggered it
-            is_manual = True
-            user = request.user
-
-            # 1. Create a new energy reading (normal data)
-            log = create_energy_reading(anomaly=False, abnormal_prediction=False,
-                                        is_manual=is_manual, user=user)
-            print(f"Created new energy log with ID: {log.id}")
-
-            # 2. Apply ML models to the new reading
-            is_anomaly, anomaly_score, predicted_load = apply_models_to_record(log.id)
-
-            print(f"Applied models to record {log.id}")
-            print(f"Is anomaly: {is_anomaly}, Score: {anomaly_score}, Predicted next load: {predicted_load}")
-
-            # 3. Check if backup is needed based on anomaly or prediction
-            settings = SystemSettings.objects.first() or {
-                'min_load_threshold': 500,
-                'max_load_threshold': 2000,
-            }
-
-            if is_anomaly or (predicted_load is not None and
-                              (predicted_load < settings.min_load_threshold or
-                               predicted_load > settings.max_load_threshold)):
-                from ml.backup_database import backup_database
-                backup_performed = backup_database(log.id)
-                if backup_performed:
-                    print("Automatic backup performed")
-
-        except Exception as e:
-            print(f"Error running simulation: {e}")
-
-    # Check if the request was made with HTMX
-    if request.headers.get('HX-Request'):
-        # Return both logs and stats to update both sections
-        logs = EnergyLog.objects.all().order_by('-timestamp')[:15]
-        stats = get_stats()  # Import this from dashboard.py
-        context = {
-            'logs': logs,
-            'stats': stats,
-        }
-
-        # Return all sections that should be updated
-        response = render(request, 'dashboard/partials/logs_table.html', context)
-        response['HX-Trigger'] = 'statsUpdated'  # This will trigger other updates
-        return response
-    else:
-        # For non-HTMX requests, redirect to dashboard
-        return redirect('dashboard')
-
-
-@login_required
 def force_backup(request):
     """Force a manual backup without creating new data"""
     if request.method == 'POST':

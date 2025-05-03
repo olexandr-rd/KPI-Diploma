@@ -7,13 +7,13 @@
                 <th>Файл</th>
                 <th>Розмір</th>
                 <th>Статус</th>
-                <th>Причина</th>
+                <th>Вид</th>
             </tr>
         </thead>
         <tbody>
             {% for backup in backups %}
             <tr class="{% if backup.status == 'SUCCESS' %}table-success{% elif backup.status == 'FAILED' %}table-danger{% endif %}">
-                <td>{{ backup.timestamp }}</td>
+                <td>{{ backup.timestamp|date:"H:i, d.m.Y" }}</td>
                 <td>{{ backup.backup_file }}</td>
                 <td>{{ backup.size_kb|floatformat:2 }} КБ</td>
                 <td>

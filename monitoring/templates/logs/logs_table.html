@@ -1,0 +1,71 @@
+<!-- monitoring/templates/logs/logs_table.html -->
+<div class="table-responsive">
+    <table class="table table-hover table-sm mb-0">
+        <thead class="table-light">
+        <tr>
+            <th>ID</th>
+            <th>Час</th>
+            <th>Навантаження (Вт)</th>
+            <th>Прогнозоване (Вт)</th>
+            <th>Тип</th>
+            <th>Аномалія</th>
+            <th>Пояснення аномалії</th>
+            <th>Резервна копія</th>
+            <th>Деталі</th>
+        </tr>
+        </thead>
+        <tbody>
+        {% for log in logs %}
+            <tr class="{% if log.is_anomaly %}anomaly{% endif %}">
+                <td>{{ log.id }}</td>
+                <td>{{ log.timestamp|date:"d.m.Y H:i:s" }}</td>
+                <td>{{ log.load_power|floatformat:2 }}</td>
+                <td>{{ log.predicted_load|default:"-"|floatformat:2 }}</td>
+                <td>
+                    {% if log.is_manual %}
+                        <span class="badge bg-info text-white"><i
+                                class="bi bi-person"></i> Ручний</span>
+                    {% else %}
+                        <span class="badge bg-secondary text-white"><i
+                                class="bi bi-robot"></i> Авто</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if log.is_anomaly %}
+                        <span class="badge bg-danger">Так</span>
+                    {% else %}
+                        <span class="badge bg-success">Ні</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if log.is_anomaly %}
+                        {% if log.anomaly_reason %}
+                            <span class="text-danger">{{ log.anomaly_reason|truncatechars:50 }}</span>
+                        {% else %}
+                            <span class="text-danger">{{ log.get_anomaly_description }}</span>
+                        {% endif %}
+                    {% else %}
+                        Не виявлено
+                    {% endif %}
+                </td>
+                <td>
+                    {% if log.backup_triggered %}
+                        <span class="badge bg-primary"><i class="bi bi-check-circle"></i> Так</span>
+                    {% else %}
+                        <span class="badge bg-secondary">Ні</span>
+                    {% endif %}
+                </td>
+                <td>
+                    <a href="{% url 'log_detail' log.id %}" class="btn btn-sm btn-outline-primary">
+                        <i class="bi bi-eye"></i>
+                    </a>
+                </td>
+            </tr>
+        {% empty %}
+            <tr>
+                <td colspan="9" class="text-center py-4">Записів не знайдено</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
