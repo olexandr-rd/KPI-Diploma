@@ -113,16 +113,6 @@
                         <a href="{% url 'backups_list' %}" class="btn btn-sm btn-outline-primary">
                             <i class="bi bi-server"></i> Усі резервні копії
                         </a>
-                        {% if user.profile.is_manager %}
-                        <button class="btn btn-sm btn-primary ms-2"
-                                hx-post="{% url 'force_backup' %}"
-                                hx-target="#backups-container"
-                                hx-indicator="#backups-indicator"
-                                hx-swap="innerHTML">
-                            <i class="bi bi-cloud-arrow-up"></i> Створити резервну копію
-                            <span class="htmx-indicator spinner-border spinner-border-sm text-light" id="backups-indicator" role="status"></span>
-                        </button>
-                        {% endif %}
                     </div>
                 </div>
                 <div class="card-body p-0" id="backups-container" hx-trigger="backupsUpdated from:body">

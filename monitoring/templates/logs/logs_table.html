@@ -15,7 +15,7 @@
         </tr>
         </thead>
         <tbody>
-        {% for log in logs %}
+        {% for log in page_obj %}
             <tr class="{% if log.is_anomaly %}anomaly{% endif %}">
                 <td>{{ log.id }}</td>
                 <td>{{ log.timestamp|date:"d.m.Y H:i:s" }}</td>

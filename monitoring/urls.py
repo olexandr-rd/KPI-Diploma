@@ -39,6 +39,8 @@ urlpatterns = [
     path('action/run-simulation-abnormal-prediction/', views.run_simulation_abnormal_prediction,
          name='run_simulation_abnormal_prediction'),
     path('action/force-backup/', views.force_backup, name='force_backup'),
+    path('backups/<int:backup_id>/restore/', views.restore_backup, name='restore_backup'),
+    path('backups/<int:backup_id>/delete/', views.delete_backup, name='delete_backup'),
 
     # Scheduler management
     path('action/start-scheduler/', views.start_scheduler, name='start_scheduler'),

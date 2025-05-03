@@ -498,8 +498,10 @@ def start_scheduler():
             time.sleep(5)
 
 
+# ml/scheduled_tasks.py (Update simulation functions)
+
 def simulate_with_anomaly(is_manual=False, user_id=None):
-    """Run data simulation with forced anomaly"""
+    """Run simulation with forced anomaly"""
     logger.info("Running simulation with forced anomaly")
 
     try:
@@ -524,11 +526,8 @@ def simulate_with_anomaly(is_manual=False, user_id=None):
         logger.info(f"Applied models to record {log.id}")
         logger.info(f"Is anomaly: {is_anomaly}, Score: {anomaly_score}, Predicted next load: {predicted_load}")
 
-        # Perform backup
-        from ml.backup_database import backup_database
-        reason = "MANUAL" if is_manual else "PREDICTION"
-        backup_performed = backup_database(log.id, reason=reason, user=user)
-        logger.info(f"Backup performed: {backup_performed}")
+        # Let system decide if backup is needed
+        # System will use ANOMALY reason automatically if an anomaly is detected
 
         return log.id
     except Exception as e:
@@ -539,7 +538,7 @@ def simulate_with_anomaly(is_manual=False, user_id=None):
 
 
 def simulate_with_abnormal_prediction(is_manual=False, user_id=None):
-    """Run data simulation with abnormal prediction"""
+    """Run simulation with abnormal prediction"""
     logger.info("Running simulation with abnormal prediction")
 
     try:
@@ -563,12 +562,6 @@ def simulate_with_abnormal_prediction(is_manual=False, user_id=None):
         is_anomaly, anomaly_score, predicted_load = apply_models_to_record(log.id)
         logger.info(f"Applied models to record {log.id}")
         logger.info(f"Is anomaly: {is_anomaly}, Score: {anomaly_score}, Predicted next load: {predicted_load}")
-
-        # Perform backup
-        from ml.backup_database import backup_database
-        reason = "MANUAL" if is_manual else "PREDICTION"
-        backup_performed = backup_database(log.id, reason=reason, user=user)
-        logger.info(f"Backup performed: {backup_performed}")
 
         return log.id
     except Exception as e:

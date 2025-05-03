@@ -142,16 +142,14 @@ def create_scheduled_backup():
     logger.info("Creating scheduled backup")
 
     try:
-        # Get the latest record
-        latest_record = EnergyLog.objects.latest('timestamp')
-
-        # Force backup
-        return backup_database(latest_record.id, reason="SCHEDULED")
+        return backup_database(record_id=None, reason="SCHEDULED")
 
     except Exception as e:
         logger.error(f"Error creating scheduled backup: {str(e)}")
         return False
 
+
+# ml/backup_database.py (Updated function continued)
 
 def backup_database(record_id=None, force=False, reason=None, user=None):
     """
@@ -162,7 +160,7 @@ def backup_database(record_id=None, force=False, reason=None, user=None):
     4. Specific reason is provided
 
     Args:
-        record_id: ID of record to check, or None for latest
+        record_id: ID of record to check, or None for no association
         force: Force backup regardless of anomaly status
         reason: Optional specific reason for backup
         user: User who initiated the backup
@@ -171,49 +169,60 @@ def backup_database(record_id=None, force=False, reason=None, user=None):
         bool: True if backup was performed
     """
     # Load system settings
-
-    # Get the record to check
-    if record_id:
-        record = EnergyLog.objects.get(id=record_id)
-    else:
-        record = EnergyLog.objects.latest('timestamp')
+    settings = load_system_settings()
 
     # Determine backup reason
     trigger_reason = reason
 
-    # Check all conditions that might trigger a backup
-    is_anomalous = record.is_anomaly
-    predicted_load_abnormal = False
+    record = None
+    if record_id:
+        # Get the record to check if ID was provided
+        record = EnergyLog.objects.get(id=record_id)
 
-    # Get current thresholds from settings
-    settings = load_system_settings()
-    min_threshold = settings.min_load_threshold
-    max_threshold = settings.max_load_threshold
+        # Check all conditions that might trigger a backup
+        is_anomalous = record.is_anomaly
+        predicted_load_abnormal = False
 
-    # Check the prediction
-    if record.predicted_load is not None:
-        if record.predicted_load < min_threshold or record.predicted_load > max_threshold:
-            predicted_load_abnormal = True
+        # Get current thresholds from settings
+        min_threshold = settings.min_load_threshold
+        max_threshold = settings.max_load_threshold
+
+        # Check the prediction
+        if record.predicted_load is not None:
+            if record.predicted_load < min_threshold or record.predicted_load > max_threshold:
+                predicted_load_abnormal = True
+                logger.info(
+                    f"Predicted load {record.predicted_load:.2f}W is outside normal range ({min_threshold}-{max_threshold}W)")
+
+        # Determine trigger reason in clear priority order
+        if force:
+            trigger_reason = "MANUAL"
+            logger.info("Manual backup requested via force flag")
+        elif reason:
+            # Use the provided reason (already set)
+            pass
+        elif is_anomalous:
+            trigger_reason = "ANOMALY"
+        elif predicted_load_abnormal:
+            trigger_reason = "PREDICTION"
+
+        # If no reason to back up and not forced, exit
+        if trigger_reason is None and not force:
             logger.info(
-                f"Predicted load {record.predicted_load:.2f}W is outside normal range ({min_threshold}-{max_threshold}W)")
-
-    # Determine trigger reason in clear priority order
-    if force:
-        trigger_reason = "MANUAL"
-        logger.info("Manual backup requested via force flag")
-    elif reason:
-        # Use the provided reason (already set)
-        pass
-    elif is_anomalous:
-        trigger_reason = "ANOMALY"
-    elif predicted_load_abnormal:
-        trigger_reason = "PREDICTION"
-
-    # If no reason to back up, exit
-    if trigger_reason is None:
-        logger.info(
-            f"Record {record.id} does not need backup (anomaly={is_anomalous}, pred_load_abnormal={predicted_load_abnormal})")
-        return False
+                f"Record {record.id} does not need backup (anomaly={is_anomalous}, pred_load_abnormal={predicted_load_abnormal})")
+            return False
+    else:
+        # No record provided, must have force or reason
+        if force:
+            trigger_reason = "MANUAL"
+            logger.info("Manual backup requested without record association")
+        elif reason:
+            # Use the provided reason
+            logger.info(f"Backup requested with reason {reason} without record association")
+        else:
+            # No record, no force, no reason - exit
+            logger.info("No record, force, or reason provided for backup")
+            return False
 
     # Get database settings from Django settings, not from the SystemSettings model
     from django.conf import settings as django_settings
@@ -231,8 +240,8 @@ def backup_database(record_id=None, force=False, reason=None, user=None):
 
         # If it's successful, just return True to indicate backup was done
         if existing_backup.status == "SUCCESS":
-            # Just ensure the record is associated with this backup
-            if record not in existing_backup.triggered_by.all():
+            # Just ensure the record is associated with this backup if provided
+            if record and record not in existing_backup.triggered_by.all():
                 existing_backup.triggered_by.add(record)
                 # Mark record as backed up if not already
                 if not record.backup_triggered:
@@ -290,17 +299,15 @@ def backup_database(record_id=None, force=False, reason=None, user=None):
                 )
                 logger.info(f"Created new backup log with ID {backup_log.id}")
 
-            # Associate backup with the triggering record
-            backup_log.triggered_by.add(record)
+            # Associate backup with the triggering record if provided
+            if record:
+                backup_log.triggered_by.add(record)
 
-            # Mark record as backed up
-            record.backup_triggered = True
-            record.save()
+                # Mark record as backed up
+                record.backup_triggered = True
+                record.save()
 
-            logger.info(f"Marked record {record.id} as backed up")
-
-            # # Cleanup after successful backup
-            # cleanup_old_backups()
+                logger.info(f"Marked record {record.id} as backed up")
 
             return True
         else:
@@ -326,8 +333,9 @@ def backup_database(record_id=None, force=False, reason=None, user=None):
                 )
                 logger.info(f"Created new FAILED backup log with ID {backup_log.id}")
 
-            # Associate backup with the triggering record
-            backup_log.triggered_by.add(record)
+            # Associate backup with the triggering record if provided
+            if record:
+                backup_log.triggered_by.add(record)
 
             return False
 
@@ -351,13 +359,160 @@ def backup_database(record_id=None, force=False, reason=None, user=None):
                     error_message=str(e)[:255],  # Truncate if needed
                     created_by=user
                 )
-                # Associate backup with the triggering record
-                backup_log.triggered_by.add(record)
+                # Associate backup with the triggering record if provided
+                if record:
+                    backup_log.triggered_by.add(record)
                 logger.info(f"Created new FAILED backup log with ID {backup_log.id}")
             except Exception as inner_e:
                 logger.error(f"Failed to log backup failure: {str(inner_e)}")
 
         return False
+
+
+def restore_database(backup_filename, user=None):
+    """
+    Restore only the energy logs from a backup file
+
+    Args:
+        backup_filename: Name of the backup file
+        user: User who initiated the restore
+
+    Returns:
+        tuple: (success, message)
+    """
+    from django.conf import settings
+    import tempfile
+    import re
+
+    logger.info(f"Attempting to restore energy logs from {backup_filename}")
+
+    backup_file = os.path.join(backups_dir, backup_filename)
+
+    # Check if the file exists
+    if not os.path.exists(backup_file):
+        error_msg = f"Файл резервної копії не знайдено: {backup_filename}"
+        logger.error(error_msg)
+        return False, error_msg
+
+    # Get database settings
+    db_settings = settings.DATABASES['default']
+
+    try:
+        # Create a temporary file to hold only the energy logs data
+        with tempfile.NamedTemporaryFile(suffix='.sql', mode='w', delete=False) as temp_file:
+            temp_path = temp_file.name
+
+            # Read the original backup file
+            with open(backup_file, 'r') as original_file:
+                content = original_file.read()
+
+            # Extract only the energy logs table data and schema
+            # Define patterns to match the energy logs table SQL statements
+            table_pattern = r'CREATE TABLE public\.monitoring_energylog[\s\S]*?;\s*\n'
+            sequence_pattern = r'CREATE SEQUENCE public\.monitoring_energylog_id_seq[\s\S]*?;\s*\n'
+            data_pattern = r'COPY public\.monitoring_energylog[\s\S]*?\\.\s*\n'
+            index_pattern = r'CREATE INDEX[\s\S]*?monitoring_energylog[\s\S]*?;\s*\n'
+
+            # Find all relevant sections
+            table_match = re.search(table_pattern, content)
+            sequence_match = re.search(sequence_pattern, content)
+            data_match = re.search(data_pattern, content)
+            index_matches = re.finditer(index_pattern, content)
+
+            # Start with statements to drop existing table
+            temp_file.write('-- Generated restore script for monitoring_energylog\n')
+            temp_file.write('BEGIN;\n')
+            temp_file.write('DROP TABLE IF EXISTS public.monitoring_energylog CASCADE;\n')
+
+            # Write the relevant sections to the temp file
+            if sequence_match:
+                temp_file.write(sequence_match.group(0))
+
+            if table_match:
+                temp_file.write(table_match.group(0))
+
+            # Write any relevant indexes
+            for match in index_matches:
+                temp_file.write(match.group(0))
+
+            # Write the data
+            if data_match:
+                temp_file.write(data_match.group(0))
+
+            temp_file.write('COMMIT;\n')
+
+        # Now restore from the temporary file
+        restore_cmd = [
+            'psql',
+            '-h', db_settings['HOST'],
+            '-p', db_settings['PORT'],
+            '-U', db_settings['USER'],
+            '-d', db_settings['NAME'],
+            '-f', temp_path
+        ]
+
+        logger.info(f"Restoring energy logs from temporary file {temp_path}")
+        restore_process = subprocess.Popen(
+            restore_cmd,
+            env=dict(os.environ, PGPASSWORD=db_settings['PASSWORD']),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE
+        )
+        restore_stdout, restore_stderr = restore_process.communicate()
+
+        # Clean up the temporary file
+        try:
+            os.unlink(temp_path)
+        except Exception as e:
+            logger.warning(f"Failed to delete temporary file {temp_path}: {e}")
+
+        if restore_process.returncode != 0:
+            error_msg = f"Failed to restore energy logs: {restore_stderr.decode('utf-8')}"
+            logger.error(error_msg)
+            return False, error_msg
+
+        logger.info("Energy logs restored successfully")
+        return True, "Energy logs restored successfully"
+
+    except Exception as e:
+        error_msg = f"Exception during database restore: {str(e)}"
+        logger.error(error_msg)
+        import traceback
+        logger.error(traceback.format_exc())
+        return False, error_msg
+
+
+def delete_backup_file(backup_filename):
+    """
+    Delete a backup file
+
+    Args:
+        backup_filename: Name of the backup file
+
+    Returns:
+        tuple: (success, message)
+    """
+    backup_file = os.path.join(backups_dir, backup_filename)
+
+    logger.info(f"Attempting to delete backup file: {backup_file}")
+
+    # Check if the file exists
+    if not os.path.exists(backup_file):
+        error_msg = f"Файл резервної копії не знайдено: {backup_filename}"
+        logger.error(error_msg)
+        return False, error_msg
+
+    try:
+        # Delete the file
+        os.remove(backup_file)
+        logger.info(f"Backup file deleted: {backup_file}")
+        return True, "Backup file deleted successfully"
+    except Exception as e:
+        error_msg = f"Error deleting backup file: {str(e)}"
+        logger.error(error_msg)
+        import traceback
+        logger.error(traceback.format_exc())
+        return False, error_msg
 
 
 if __name__ == "__main__":
