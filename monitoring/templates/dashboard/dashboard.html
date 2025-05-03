@@ -8,7 +8,6 @@
     <div class="row mb-4">
         <div class="col">
             <h1 class="h3"><i class="bi bi-speedometer2"></i> Панель моніторингу</h1>
-{#            <p class="text-muted">Огляд стану енергосистеми та резервного копіювання</p>#}
         </div>
     </div>
 
@@ -18,7 +17,7 @@
         <i class="bi bi-exclamation-triangle-fill me-2"></i> <strong>Увага!</strong> Планувальник не запущено.
         Автоматичний збір даних та резервне копіювання недоступні.
         {% if user.profile.is_manager %}
-            <a href="{% url 'scheduler_status' %}" class="btn btn-sm btn-warning ms-3">Керувати планувальником</a>
+            <a href="{% url 'system_settings' %}" class="btn btn-sm btn-warning ms-3">Керувати планувальником</a>
         {% endif %}
     </div>
     {% endif %}
@@ -39,16 +38,6 @@
                         <a href="{% url 'logs_list' %}" class="btn btn-sm btn-outline-primary">
                             <i class="bi bi-list-ul"></i> Усі записи
                         </a>
-{#                        {% if user.profile.is_manager %}#}
-{#                        <button class="btn btn-sm btn-primary ms-2"#}
-{#                                hx-post="{% url 'run_simulation' %}"#}
-{#                                hx-target="#logs-container"#}
-{#                                hx-indicator="#logs-indicator"#}
-{#                                hx-swap="innerHTML">#}
-{#                            <i class="bi bi-lightning-charge"></i> Створити запис#}
-{#                            <span class="htmx-indicator spinner-border spinner-border-sm text-light" id="logs-indicator" role="status"></span>#}
-{#                        </button>#}
-{#                        {% endif %}#}
                     </div>
                 </div>
                 <div class="card-body p-0" id="logs-container" hx-trigger="logsUpdated from:body">

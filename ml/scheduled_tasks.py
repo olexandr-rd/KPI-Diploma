@@ -24,37 +24,26 @@ logs_dir = os.path.join(BASE_DIR, 'logs')
 os.makedirs(logs_dir, exist_ok=True)
 
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler(os.path.join(logs_dir, 'scheduler.log')),
-        logging.StreamHandler()
-    ]
-)
 logger = logging.getLogger('scheduler')
+# Clear any existing handlers to prevent duplication
+if logger.handlers:
+    logger.handlers = []
 
-# # Configure logging
-# logger = logging.getLogger('scheduler')
-# # Clear any existing handlers to prevent duplication
-# if logger.handlers:
-#     logger.handlers = []
-#
-# logger.setLevel(logging.INFO)
-# formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-#
-# # Add file handler
-# file_handler = logging.FileHandler(os.path.join(logs_dir, 'scheduler.log'))
-# file_handler.setFormatter(formatter)
-# logger.addHandler(file_handler)
-#
-# # Add console handler
-# console_handler = logging.StreamHandler()
-# console_handler.setFormatter(formatter)
-# logger.addHandler(console_handler)
-#
-# # Prevent propagation to root logger to avoid duplicated logs
-# logger.propagate = False
+logger.setLevel(logging.INFO)
+formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+
+# Add file handler
+file_handler = logging.FileHandler(os.path.join(logs_dir, 'scheduler.log'))
+file_handler.setFormatter(formatter)
+logger.addHandler(file_handler)
+
+# Add console handler
+console_handler = logging.StreamHandler()
+console_handler.setFormatter(formatter)
+logger.addHandler(console_handler)
+
+# Prevent propagation to root logger to avoid duplicated logs
+logger.propagate = False
 
 # Store active jobs for management
 active_jobs = {
@@ -123,44 +112,38 @@ def prioritized_job_wrapper(func):
     return wrapper
 
 
+@prioritized_job_wrapper
 def run_data_simulation():
-    """Run the data simulation directly"""
+    """Run the data simulation directly with proper connection handling"""
     logger.info("Running scheduled data simulation")
 
     try:
-        # Import needed functions directly
-        from ml.simulate_data import create_energy_reading
-        from ml.apply_models_to_record import apply_models_to_record
-        from ml.backup_database import backup_database, PREDICTED_LOAD_MIN, PREDICTED_LOAD_MAX
-
-        # 1. Create a new energy reading
-        log = create_energy_reading()
-        logger.info(f"Created new energy log with ID: {log.id}")
-
-        # 2. Apply ML models
-        is_anomaly, anomaly_score, predicted_load = apply_models_to_record(log.id)
-        logger.info(f"Applied models to record {log.id}")
-        logger.info(f"Is anomaly: {is_anomaly}, Score: {anomaly_score}, Predicted next load: {predicted_load}")
-
-        # 3. Check if backup is needed
-        if is_anomaly:
-            logger.info(f"Anomaly detected (score: {anomaly_score}), triggering backup")
-            backup_performed = backup_database(log.id)
-            if backup_performed:
-                logger.info("Backup completed successfully")
-            else:
-                logger.info("Backup failed")
-        elif predicted_load is not None and (
-                predicted_load < PREDICTED_LOAD_MIN or predicted_load > PREDICTED_LOAD_MAX):
-            logger.info(f"Abnormal prediction detected ({predicted_load:.2f}W), triggering backup")
-            backup_performed = backup_database(log.id)
-            if backup_performed:
-                logger.info("Backup completed successfully")
-            else:
-                logger.info("Backup failed")
+        # Import functions from simulate_data instead of reimplementing
+        from ml.simulate_data import run_simulation_with_type
+        
+        # Run the simulation with proper error handling
+        log_id, simulation_message = run_simulation_with_type(
+            simulation_type=None,  # Normal simulation
+            is_manual=False,       # Automated by scheduler
+            user_id=None           # No user for automated tasks
+        )
+        
+        if log_id:
+            logger.info(f"Data simulation completed successfully. Log ID: {log_id}, {simulation_message}")
         else:
-            logger.info(f"No issues detected - no backup needed")
-
+            logger.error("Data simulation failed - no log ID returned")
+            
+    except django.db.utils.InterfaceError as e:
+        # Handle the specific connection closed error
+        logger.error(f"Database connection error during data simulation: {str(e)}")
+        
+        # Force close the connection to ensure it's re-established on next use
+        from django.db import connection
+        connection.close()
+        
+        # Could attempt a retry here if needed
+        logger.info("Closed broken database connection. Next run will establish a fresh connection.")
+        
     except Exception as e:
         logger.error(f"Exception during data simulation: {str(e)}")
         import traceback

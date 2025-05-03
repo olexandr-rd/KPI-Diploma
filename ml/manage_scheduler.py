@@ -1,4 +1,3 @@
-#!/usr/bin/env python
 # ml/manage_scheduler.py
 
 import os
@@ -6,7 +5,6 @@ import argparse
 import psutil
 import sys
 import subprocess
-# import signal
 import time
 from pathlib import Path
 
@@ -140,62 +138,22 @@ def restart_scheduler():
     start_scheduler()
 
 
-def run_once():
-    """Run the simulation and maintenance once without starting the scheduler"""
-    print("Running data simulation once...")
-
-    # Use absolute paths
-    script_path = os.path.join(BASE_DIR, 'ml', 'simulate_data.py')
-    python_executable = sys.executable
-
-    try:
-        result = subprocess.run(
-            [python_executable, script_path],
-            check=True,
-            capture_output=True,
-            text=True
-        )
-        print(result.stdout)
-    except subprocess.CalledProcessError as e:
-        print(f"Error: {e}")
-        print(f"Output: {e.stdout}")
-        print(f"Error: {e.stderr}")
-
-    print("\nRunning maintenance tasks once...")
-
-    # Import Django settings and run cleanup directly
-    try:
-        import django
-        os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'Diploma.settings')
-        django.setup()
-
-        from ml.scheduled_tasks import cleanup_old_backups, purge_old_energy_logs
-        cleanup_old_backups()
-        purge_old_energy_logs()
-        print('Maintenance completed')
-    except Exception as e:
-        print(f"Error running maintenance: {e}")
-
-
 def main():
     parser = argparse.ArgumentParser(description="Manage the energy monitoring scheduler")
-    parser.add_argument("action", choices=["start", "stop", "restart", "status", "run-once"],
+    parser.add_argument("action", choices=["start", "stop", "restart", "status"],
                         help="Action to perform")
 
-    args = parser.parse_args()
-
-    if args.action == "start":
-        start_scheduler()
-    elif args.action == "stop":
-        stop_scheduler()
-    elif args.action == "restart":
-        restart_scheduler()
-    elif args.action == "status":
-        status_scheduler()
-    elif args.action == "run-once":
-        run_once()
-    else:
-        print("Invalid action. Please specify a valid action (start, stop, restart, status, run-once).")
+    match parser.parse_args():
+        case "start":
+            start_scheduler()
+        case "stop":
+            stop_scheduler()
+        case "restart":
+            restart_scheduler()
+        case "status":
+            status_scheduler()
+        case _:
+            print("Invalid action. Please specify a valid action (start, stop, restart, status).")
 
 
 if __name__ == "__main__":

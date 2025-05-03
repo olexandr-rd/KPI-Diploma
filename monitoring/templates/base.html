@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}Моніторинг стану енергосистеми{% endblock %}</title>
+    <title>{% block title %}Моніторинг енергосистеми{% endblock %}</title>
 
     <!-- Bootstrap 5 CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -146,18 +146,18 @@
     {% block extra_css %}{% endblock %}
 </head>
 <body>
-    <!-- Top Navbar -->
-    <nav class="col-12 navbar navbar-expand-md navbar-dark bg-primary sticky-top">
-        <div class="container-fluid">
-            <a class="navbar-brand" href="{% url 'dashboard' %}">
-                <i class="bi bi-lightning-charge-fill"></i> Моніторинг стану енергосистеми
-            </a>
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarSupportedContent">
-                <span class="navbar-toggler-icon"></span>
-            </button>
-            <div class="collapse navbar-collapse" id="navbarSupportedContent">
-                <ul class="navbar-nav me-auto mb-2 mb-lg-0">
-                    {% if user.is_authenticated %}
+<!-- Top Navbar -->
+<nav class="col-12 navbar navbar-expand-md navbar-dark bg-primary sticky-top">
+    <div class="container-fluid">
+        <a class="navbar-brand" href="{% url 'dashboard' %}">
+            <i class="bi bi-lightning-charge-fill"></i> Моніторинг енергосистеми
+        </a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarSupportedContent">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navbarSupportedContent">
+            <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+                {% if user.is_authenticated %}
                     <li class="nav-item">
                         <a class="nav-link {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}"
                            href="{% url 'dashboard' %}">
@@ -182,15 +182,16 @@
                             <i class="bi bi-graph-up"></i> Аналітика
                         </a>
                     </li>
-                    {% endif %}
-                </ul>
+                {% endif %}
+            </ul>
 
-                <ul class="navbar-nav ms-auto">
-                    {% if user.is_authenticated %}
+            <ul class="navbar-nav ms-auto">
+                {% if user.is_authenticated %}
                     <li class="nav-item dropdown">
                         <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button"
                            data-bs-toggle="dropdown" aria-expanded="false">
-                            <i class="bi bi-person-circle"></i> {% if user.get_full_name %}{{ user.get_full_name }}{% else %}{{ user.username }}{% endif %}
+                            <i class="bi bi-person-circle"></i>
+                            {% if user.get_full_name %}{{ user.get_full_name }}{% else %}{{ user.username }}{% endif %}
                             {% if user.profile.role == 'admin' %}
                                 <span class="badge bg-danger">Адмін</span>
                             {% elif user.profile.role == 'manager' %}
@@ -199,78 +200,78 @@
                         </a>
                         <ul class="dropdown-menu dropdown-menu-end">
                             {% if user.profile.is_admin %}
-                            <li>
-                                <a class="dropdown-item" href="{% url 'user_management' %}">
-                                    <i class="bi bi-people"></i> Управління користувачами
-                                </a>
-                            </li>
+                                <li>
+                                    <a class="dropdown-item" href="{% url 'user_management' %}">
+                                        <i class="bi bi-people"></i> Управління користувачами
+                                    </a>
+                                </li>
                             {% endif %}
 
                             {% if user.profile.is_manager %}
-                            <li>
-                                <a class="dropdown-item" href="{% url 'system_settings' %}">
-                                    <i class="bi bi-gear"></i> Налаштування системи
-                                </a>
-                            </li>
-                            <li>
-                                <a class="dropdown-item" href="{% url 'scheduler_status' %}">
-                                    <i class="bi bi-clock"></i> Керувати планувальником
-                                </a>
-                            </li>
-                            <li><hr class="dropdown-divider"></li>
+                                <li>
+                                    <a class="dropdown-item" href="{% url 'system_settings' %}">
+                                        <i class="bi bi-gear"></i> Налаштування планувальника
+                                    </a>
+                                </li>
+                                <li>
+                                    <hr class="dropdown-divider">
+                                </li>
                             {% endif %}
 
                             <li>
                                 <form class="dropdown-item" method="post" action="{% url 'logout' %}">
                                     {% csrf_token %}
-                                    <button type="submit" id="logout-button"><i class="bi bi-box-arrow-right"></i> Вийти</button>
+                                    <button type="submit" id="logout-button"><i class="bi bi-box-arrow-right"></i> Вийти
+                                    </button>
                                 </form>
                             </li>
                         </ul>
                     </li>
-                    {% else %}
+                {% else %}
                     <li class="nav-item">
                         <a class="nav-link" href="{% url 'login' %}"><i class="bi bi-box-arrow-in-right"></i> Увійти</a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="{% url 'register' %}"><i class="bi bi-person-plus"></i> Зареєструватися</a>
+                        <a class="nav-link" href="{% url 'register' %}"><i class="bi bi-person-plus"></i>
+                            Зареєструватися</a>
                     </li>
-                    {% endif %}
-                </ul>
-            </div>
+                {% endif %}
+            </ul>
         </div>
-    </nav>
+    </div>
+</nav>
 
-    <!-- Main Content -->
-    <div class="content-wrapper">
-        <div class="container-fluid">
-            <div class="row">
-                <div class="col-12">
-                    {% block content %}{% endblock %}
-                </div>
+
+<!-- Main Content -->
+<div class="content-wrapper">
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-12">
+                {% block content %}{% endblock %}
             </div>
         </div>
     </div>
+</div>
 
-    <!-- Footer -->
-    <footer class="footer">
-        <div class="container">
-            <p class="mb-0">Система моніторингу енергії &copy; {% now "Y" %}</p>
-        </div>
-    </footer>
+<!-- Footer -->
+<footer class="footer">
+    <div class="container">
+        <p class="mb-0">Система моніторингу стану енергосистеми &copy; {% now "Y" %}</p>
+    </div>
+</footer>
 
-    <!-- Bootstrap JS Bundle -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<!-- Bootstrap JS Bundle -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 
-    <!-- CSRF token for HTMX -->
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            document.body.addEventListener('htmx:configRequest', function(evt) {
-                evt.detail.headers['X-CSRFToken'] = '{{ csrf_token }}';
-            });
+<!-- CSRF token for HTMX -->
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        document.body.addEventListener('htmx:configRequest', function (evt) {
+            evt.detail.headers['X-CSRFToken'] = '{{ csrf_token }}';
         });
-    </script>
+    });
+</script>
 
-    {% block extra_js %}{% endblock %}
+{% block extra_js %}{% endblock %}
 </body>
 </html>

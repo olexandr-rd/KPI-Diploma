@@ -1,7 +1,7 @@
 # monitoring/urls.py
 from django.urls import path
 from . import views
-from . import scheduler
+from . import system_settings
 from .auth import (
     CustomLoginView, CustomLogoutView, RegisterView,
     UserManagementView, UserProfileEditView
@@ -19,7 +19,6 @@ urlpatterns = [
 
     # System Settings (manager and admin)
     path('settings/', views.system_settings, name='system_settings'),
-    path('scheduler/', views.scheduler_status, name='scheduler_status'),
 
     # Main Application URLs
     path('', views.dashboard, name='dashboard'),
@@ -32,6 +31,7 @@ urlpatterns = [
     path('partial/stats/', views.stats_partial, name='stats_partial'),
     path('partial/logs/', views.logs_partial, name='logs_partial'),
     path('partial/backups/', views.backups_partial, name='backups_partial'),
+    path('scheduler_status', system_settings.scheduler_status, name='scheduler_status'),
 
     # HTMX action endpoints - simulations
     path('action/run-simulation/', views.run_normal_simulation, name='run_simulation'),
@@ -45,10 +45,10 @@ urlpatterns = [
     path('backups/<int:backup_id>/delete/', views.delete_backup, name='delete_backup'),
 
     # Scheduler management
-    path('action/start-scheduler/', views.start_scheduler, name='start_scheduler'),
-    path('action/stop-scheduler/', views.stop_scheduler, name='stop_scheduler'),
-    path('action/restart-scheduler/', views.restart_scheduler, name='restart_scheduler'),
-    path('action/run-maintenance/', scheduler.run_maintenance, name='run_maintenance'),
+    path('action/start-scheduler/', system_settings.start_scheduler, name='start_scheduler'),
+    path('action/stop-scheduler/', system_settings.stop_scheduler, name='stop_scheduler'),
+    path('action/restart-scheduler/', system_settings.restart_scheduler, name='restart_scheduler'),
+    path('action/run-maintenance/', system_settings.run_maintenance, name='run_maintenance'),
 
     # HTMX chart endpoints for analytics
     path('charts/load-trend/', views.load_trend_chart, name='load_trend_chart'),
