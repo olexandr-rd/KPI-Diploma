@@ -149,8 +149,6 @@ def create_scheduled_backup():
         return False
 
 
-# ml/backup_database.py (Updated function continued)
-
 def backup_database(record_id=None, force=False, reason=None, user=None):
     """
     Create a backup of the PostgreSQL database if:
@@ -369,6 +367,8 @@ def backup_database(record_id=None, force=False, reason=None, user=None):
         return False
 
 
+# ml/backup_database.py (restore_database function)
+
 def restore_database(backup_filename, user=None):
     """
     Restore only the energy logs from a backup file
@@ -470,6 +470,16 @@ def restore_database(backup_filename, user=None):
             error_msg = f"Failed to restore energy logs: {restore_stderr.decode('utf-8')}"
             logger.error(error_msg)
             return False, error_msg
+
+        # Log the restoration
+        restoration_log = BackupLog.objects.create(
+            backup_file=f"restored_from_{backup_filename}",
+            status="SUCCESS",
+            size_kb=0,  # No actual file created
+            trigger_reason="MANUAL",
+            error_message=None,
+            created_by=user
+        )
 
         logger.info("Energy logs restored successfully")
         return True, "Energy logs restored successfully"

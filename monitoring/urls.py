@@ -1,11 +1,11 @@
 # monitoring/urls.py
 from django.urls import path
 from . import views
+from . import scheduler
 from .auth import (
     CustomLoginView, CustomLogoutView, RegisterView,
     UserManagementView, UserProfileEditView
 )
-from . import scheduler
 
 urlpatterns = [
     # Authentication URLs
@@ -33,11 +33,13 @@ urlpatterns = [
     path('partial/logs/', views.logs_partial, name='logs_partial'),
     path('partial/backups/', views.backups_partial, name='backups_partial'),
 
-    # HTMX action endpoints
-    path('action/run-simulation/', views.run_simulation, name='run_simulation'),
-    path('action/run-simulation-anomaly/', views.run_simulation_anomaly, name='run_simulation_anomaly'),
-    path('action/run-simulation-abnormal-prediction/', views.run_simulation_abnormal_prediction,
+    # HTMX action endpoints - simulations
+    path('action/run-simulation/', views.run_normal_simulation, name='run_simulation'),
+    path('action/run-simulation-anomaly/', views.run_anomaly_simulation, name='run_simulation_anomaly'),
+    path('action/run-simulation-abnormal-prediction/', views.run_abnormal_prediction_simulation,
          name='run_simulation_abnormal_prediction'),
+
+    # Backup management actions
     path('action/force-backup/', views.force_backup, name='force_backup'),
     path('backups/<int:backup_id>/restore/', views.restore_backup, name='restore_backup'),
     path('backups/<int:backup_id>/delete/', views.delete_backup, name='delete_backup'),

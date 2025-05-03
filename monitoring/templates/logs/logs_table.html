@@ -45,7 +45,7 @@
                             <span class="text-danger">{{ log.get_anomaly_description }}</span>
                         {% endif %}
                     {% else %}
-                        Не виявлено
+                        <span class="text-muted">Не виявлено</span>
                     {% endif %}
                 </td>
                 <td>
@@ -69,3 +69,83 @@
         </tbody>
     </table>
 </div>
+
+<!-- Pagination -->
+{% if page_obj.has_other_pages %}
+    <div class="card-footer bg-white d-flex justify-content-between align-items-center">
+        <div class="small text-muted">
+            Показано {{ page_obj.start_index }}-{{ page_obj.end_index }} із {{ page_obj.paginator.count }}
+            записів
+        </div>
+        <nav aria-label="Page navigation">
+            <ul class="pagination pagination-sm mb-0">
+                {% if page_obj.has_previous %}
+                    <li class="page-item">
+                        <a class="page-link"
+                           href="?page=1{% if search_query %}&q={{ search_query }}{% endif %}{% if is_anomaly %}&anomaly={{ is_anomaly }}{% endif %}{% if is_manual %}&manual={{ is_manual }}{% endif %}{% if has_backup %}&backup={{ has_backup }}{% endif %}"
+                           aria-label="First">
+                            <span aria-hidden="true">&laquo;&laquo;</span>
+                        </a>
+                    </li>
+                    <li class="page-item">
+                        <a class="page-link" href="?page=
+                                {{ page_obj.previous_page_number }}{% if search_query %}&q={{ search_query }}{% endif %}{% if is_anomaly %}&anomaly={{ is_anomaly }}{% endif %}{% if is_manual %}&manual={{ is_manual }}{% endif %}{% if has_backup %}&backup={{ has_backup }}{% endif %}"
+                           aria-label="Previous">
+                            <span aria-hidden="true">&laquo;</span>
+                        </a>
+                    </li>
+                {% else %}
+                    <li class="page-item disabled">
+                        <a class="page-link" href="#" aria-label="First">
+                            <span aria-hidden="true">&laquo;&laquo;</span>
+                        </a>
+                    </li>
+                    <li class="page-item disabled">
+                        <a class="page-link" href="#" aria-label="Previous">
+                            <span aria-hidden="true">&laquo;</span>
+                        </a>
+                    </li>
+                {% endif %}
+
+                {% for i in page_obj.paginator.page_range %}
+                    {% if page_obj.number == i %}
+                        <li class="page-item active"><a class="page-link" href="#">{{ i }}</a></li>
+                    {% elif i > page_obj.number|add:"-3" and i < page_obj.number|add:"3" %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page=
+                                    {{ i }}{% if search_query %}&q={{ search_query }}{% endif %}{% if is_anomaly %}&anomaly={{ is_anomaly }}{% endif %}{% if is_manual %}&manual={{ is_manual }}{% endif %}{% if has_backup %}&backup={{ has_backup }}{% endif %}">{{ i }}</a>
+                        </li>
+                    {% endif %}
+                {% endfor %}
+
+                {% if page_obj.has_next %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page=
+                                {{ page_obj.next_page_number }}{% if search_query %}&q={{ search_query }}{% endif %}{% if is_anomaly %}&anomaly={{ is_anomaly }}{% endif %}{% if is_manual %}&manual={{ is_manual }}{% endif %}{% if has_backup %}&backup={{ has_backup }}{% endif %}"
+                           aria-label="Next">
+                            <span aria-hidden="true">&raquo;</span>
+                        </a>
+                    </li>
+                    <li class="page-item">
+                        <a class="page-link" href="?page=
+                                {{ page_obj.paginator.num_pages }}{% if search_query %}&q={{ search_query }}{% endif %}{% if is_anomaly %}&anomaly={{ is_anomaly }}{% endif %}{% if is_manual %}&manual={{ is_manual }}{% endif %}{% if has_backup %}&backup={{ has_backup }}{% endif %}"
+                           aria-label="Last">
+                            <span aria-hidden="true">&raquo;&raquo;</span>
+                        </a>
+                    </li>
+                {% else %}
+                    <li class="page-item disabled">
+                        <a class="page-link" href="#" aria-label="Next">
+                            <span aria-hidden="true">&raquo;</span>
+                        </a>
+                    </li>
+                    <li class="page-item disabled">
+                        <a class="page-link" href="#" aria-label="Last">
+                            <span aria-hidden="true">&raquo;&raquo;</span>
+                        </a>
+                    </li>
+                {% endif %}
+            </ul>
+        </nav>
+    </div>
+{% endif %}

@@ -59,7 +59,7 @@ def logs_list(request):
     total_manual = EnergyLog.objects.filter(is_manual=True).count()
     total_with_backup = EnergyLog.objects.filter(backup_triggered=True).count()
 
-    return render(request, 'logs/logs_list.html', {
+    context = {
         'page_obj': page_obj,
         'total_logs': total_logs,
         'total_anomalies': total_anomalies,
@@ -69,7 +69,14 @@ def logs_list(request):
         'is_anomaly': is_anomaly,
         'is_manual': is_manual,
         'has_backup': has_backup,
-    })
+    }
+
+    if request.headers.get('HX-Request'):
+        template_name = 'logs/logs_table.html'
+    else:
+        template_name = 'logs/logs_list.html'
+
+    return render(request, template_name, context)
 
 
 @login_required
@@ -92,13 +99,10 @@ def log_detail(request, pk):
     })
 
 
-# monitoring/views/logs.py
-
-# Let's create a unified simulation function first
 @login_required
-def run_simulation_generic(request, simulation_type=None):
+def run_simulation(request, simulation_type=None):
     """
-    Generic function to run different types of simulations
+    Run data simulation with optional simulation type
 
     Args:
         simulation_type: None for normal, 'anomaly' for anomalous data,
@@ -117,76 +121,72 @@ def run_simulation_generic(request, simulation_type=None):
         messages.error(request, "У вас немає профілю користувача.")
         return redirect('dashboard')
 
+    # Import the simulation function
+    from ml.simulate_data import run_simulation_with_type
+
+    # Set parameters for simulation
+    is_manual = True
+    user_id = request.user.id
+
     try:
-        # Mark the simulation as manual and note who triggered it
-        is_manual = True
-        user_id = request.user.id
-
-        # Pick the right simulation based on type
-        if simulation_type == 'anomaly':
-            from ml.scheduled_tasks import simulate_with_anomaly
-            log_id = simulate_with_anomaly(is_manual=is_manual, user_id=user_id)
-            message_text = "Симуляція аномалії"
-        elif simulation_type == 'abnormal_prediction':
-            from ml.scheduled_tasks import simulate_with_abnormal_prediction
-            log_id = simulate_with_abnormal_prediction(is_manual=is_manual, user_id=user_id)
-            message_text = "Симуляція аномального прогнозу"
-        else:
-            # Normal simulation (existing run_simulation logic)
-            from ml.simulate_data import create_energy_reading
-            from ml.apply_models_to_record import apply_models_to_record
-
-            # Create a new energy reading (normal data)
-            log = create_energy_reading(anomaly=False, abnormal_prediction=False,
-                                        is_manual=is_manual, user=request.user)
-
-            # Apply ML models to the new reading
-            is_anomaly, anomaly_score, predicted_load = apply_models_to_record(log.id)
-            log_id = log.id
-            message_text = "Симуляція звичайних даних"
+        # Run the simulation
+        log_id, simulation_message = run_simulation_with_type(
+            simulation_type=simulation_type,
+            is_manual=is_manual,
+            user_id=user_id
+        )
 
         if log_id:
-            messages.success(request, f"{message_text} виконана успішно. ID запису: {log_id}")
+            messages.success(request, f"{simulation_message} виконана успішно. ID запису: {log_id}")
         else:
             messages.error(request, f"Помилка виконання симуляції")
 
     except Exception as e:
         messages.error(request, f"Помилка запуску симуляції: {str(e)}")
 
+    # Get the current filters from the request
+    search_query = request.GET.get('q', '')
+    is_anomaly = request.GET.get('anomaly', '')
+    is_manual = request.GET.get('manual', '')
+    has_backup = request.GET.get('backup', '')
+    page = request.GET.get('page', '1')
+
+    # Build the filter query
+    filter_params = {}
+    if search_query:
+        filter_params['q'] = search_query
+    if is_anomaly:
+        filter_params['anomaly'] = is_anomaly
+    if is_manual:
+        filter_params['manual'] = is_manual
+    if has_backup:
+        filter_params['backup'] = has_backup
+    if page != '1':
+        filter_params['page'] = page
+
     # Check if the request was made with HTMX
     if request.headers.get('HX-Request'):
-        # Get the latest logs and updated stats
-        logs = EnergyLog.objects.all().order_by('-timestamp')[:15]
-        stats = get_stats()
-
-        context = {
-            'logs': logs,
-            'stats': stats,
-        }
-
-        # Render the response with the updated logs table and trigger the event
-        response = render(request, 'logs/logs_table.html', context)
-        response['HX-Trigger'] = 'statsUpdated'  # Trigger event for stats/cards update
-        return response
+        # Forward to the logs_list view to get updated data with filters
+        return logs_list(request)
     else:
-        # For non-HTMX requests, redirect to logs list
+        # Redirect to the logs list with any filters preserved
         return redirect('logs_list')
 
 
-# Update existing view functions to use the generic one
+# Specialized views that call the generic one
 @login_required
-def run_simulation(request):
-    """Run data simulation with normal data"""
-    return run_simulation_generic(request)
-
-
-@login_required
-def run_simulation_anomaly(request):
-    """Run simulation with anomaly"""
-    return run_simulation_generic(request, simulation_type='anomaly')
+def run_normal_simulation(request):
+    """Run normal data simulation"""
+    return run_simulation(request, simulation_type=None)
 
 
 @login_required
-def run_simulation_abnormal_prediction(request):
-    """Run simulation with abnormal prediction"""
-    return run_simulation_generic(request, simulation_type='abnormal_prediction')
+def run_anomaly_simulation(request):
+    """Run anomaly data simulation"""
+    return run_simulation(request, simulation_type='anomaly')
+
+
+@login_required
+def run_abnormal_prediction_simulation(request):
+    """Run abnormal prediction simulation"""
+    return run_simulation(request, simulation_type='abnormal_prediction')

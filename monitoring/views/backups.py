@@ -70,7 +70,7 @@ def backups_list(request):
     # Get reason distribution
     reasons = BackupLog.objects.values('trigger_reason').distinct()
 
-    return render(request, 'backups/backups_list.html', {
+    context = {
         'page_obj': page_obj,
         'total_backups': total_backups,
         'successful_backups': successful_backups,
@@ -80,7 +80,15 @@ def backups_list(request):
         'reason': reason,
         'period': period,
         'reasons': reasons,
-    })
+    }
+
+    # Check if it's an HTMX request
+    if request.headers.get('HX-Request'):
+        template_name = 'backups/backups_table.html'
+    else:
+        template_name = 'backups/backups_list.html'
+
+    return render(request, template_name, context)
 
 
 @login_required
@@ -103,8 +111,6 @@ def force_backup(request):
         # Get the latest record
         latest_record = EnergyLog.objects.latest('timestamp')
 
-        print(f"Forcing backup for latest record ID: {latest_record.id}")
-
         # Import backup function directly
         from ml.backup_database import backup_database
 
@@ -119,27 +125,39 @@ def force_backup(request):
     except Exception as e:
         messages.error(request, f"Помилка при створенні резервної копії: {str(e)}")
 
+    # Get the current filters from the request
+    search_query = request.GET.get('q', '')
+    status = request.GET.get('status', '')
+    reason = request.GET.get('reason', '')
+    period = request.GET.get('period', '')
+    page = request.GET.get('page', '1')
+
     # Check if the request was made with HTMX
     if request.headers.get('HX-Request'):
-        # Get all backups for the updated view
-        backups = BackupLog.objects.all().order_by('-timestamp')[:20]
-        context = {
-            'backups': backups,
-        }
-
-        # Return the updated backups table
-        response = render(request, 'backups/backups_table.html', context)
-        response['HX-Trigger'] = 'statsUpdated'  # Trigger stats update
-        return response
+        # Forward to the backups_list view to get updated data with filters
+        return backups_list(request)
     else:
-        return redirect('backups_list')
+        # Build redirect URL with filters
+        redirect_url = 'backups_list'
+        redirect_params = {}
 
+        if search_query:
+            redirect_params['q'] = search_query
+        if status:
+            redirect_params['status'] = status
+        if reason:
+            redirect_params['reason'] = reason
+        if period:
+            redirect_params['period'] = period
+        if page != '1':
+            redirect_params['page'] = page
 
-# monitoring/views/backups.py (New functions)
+        return redirect(redirect_url, **redirect_params)
+
 
 @login_required
 def restore_backup(request, backup_id):
-    """Restore database from a backup"""
+    """Restore energy logs from a backup"""
     if request.method != 'POST':
         return redirect('backups_list')
 
@@ -164,23 +182,19 @@ def restore_backup(request, backup_id):
         success, message = restore_database(backup.backup_file, user=request.user)
 
         if success:
-            messages.success(request, f"Базу даних успішно відновлено з резервної копії {backup.backup_file}")
+            messages.success(request, f"Дані енергосистеми успішно відновлено з резервної копії {backup.backup_file}")
         else:
             messages.error(request, f"Помилка відновлення: {message}")
 
     except Exception as e:
-        messages.error(request, f"Помилка при відновленні бази даних: {str(e)}")
+        messages.error(request, f"Помилка при відновленні даних: {str(e)}")
 
-    # Return the updated backups table
-    backups = BackupLog.objects.all().order_by('-timestamp')[:20]
-    context = {
-        'backups': backups,
-    }
-
-    # Return the updated view
-    response = render(request, 'backups/backups_table.html', context)
-    response['HX-Trigger'] = 'statsUpdated'  # Trigger stats update
-    return response
+    # Check if the request was made with HTMX
+    if request.headers.get('HX-Request'):
+        # Forward to the backups_list view to get updated data with current filters
+        return backups_list(request)
+    else:
+        return redirect('backups_list')
 
 
 @login_required
@@ -219,13 +233,9 @@ def delete_backup(request, backup_id):
     except Exception as e:
         messages.error(request, f"Помилка при видаленні резервної копії: {str(e)}")
 
-    # Return the updated backups table
-    backups = BackupLog.objects.all().order_by('-timestamp')[:20]
-    context = {
-        'backups': backups,
-    }
-
-    # Return the updated view
-    response = render(request, 'backups/backups_table.html', context)
-    response['HX-Trigger'] = 'statsUpdated'  # Trigger stats update
-    return response
+    # Check if the request was made with HTMX
+    if request.headers.get('HX-Request'):
+        # Forward to the backups_list view to get updated data
+        return backups_list(request)
+    else:
+        return redirect('backups_list')

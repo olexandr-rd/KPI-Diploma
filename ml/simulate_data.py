@@ -3,7 +3,6 @@
 import os
 import django
 import numpy as np
-from datetime import datetime
 import logging
 import argparse
 from pathlib import Path
@@ -23,8 +22,6 @@ django.setup()
 
 from monitoring.models import EnergyLog, SystemSettings
 from django.contrib.auth.models import User
-from ml.apply_models_to_record import apply_models_to_record
-from ml.backup_database import backup_database
 
 # Configure logging
 logging.basicConfig(
@@ -54,20 +51,20 @@ def get_system_settings():
     })
 
 
-def create_energy_reading(anomaly=False, abnormal_prediction=False, is_manual=False, user=None):
+def create_energy_reading(simulation_type=None, is_manual=False, user=None):
     """
     Create a new energy reading simulating data from an energy system
 
     Args:
-        anomaly: Force anomalous data if True
-        abnormal_prediction: Generate data causing abnormal prediction
+        simulation_type: Type of simulation - None for normal, 'anomaly' for anomalous data,
+                         'abnormal_prediction' for abnormal prediction data
         is_manual: Flag if this is a manually triggered reading
         user: User who created this reading (for manual readings)
 
     Returns:
         EnergyLog: The created record
     """
-    if anomaly:
+    if simulation_type == 'anomaly':
         # Create clearly anomalous data
         ac_output_voltage = np.random.choice([
             np.random.normal(150, 10),  # Low voltage
@@ -83,7 +80,7 @@ def create_energy_reading(anomaly=False, abnormal_prediction=False, is_manual=Fa
             np.random.normal(10, 5)  # Almost no load
         ])
         temperature = np.random.normal(55, 5)  # High temperature
-    elif abnormal_prediction:
+    elif simulation_type == 'abnormal_prediction':
         # Create data that will lead to abnormal prediction but not trigger anomaly detector
         # These values should be within "normal" ranges but in combinations that lead to
         # extreme predicted values in the next step
@@ -116,32 +113,24 @@ def create_energy_reading(anomaly=False, abnormal_prediction=False, is_manual=Fa
         created_by=user
     )
 
-    logger.info(
-        f"Created energy log: {log.id} (Forced anomaly: {anomaly}, Abnormal prediction: {abnormal_prediction}, Manual: {is_manual})")
+    logger.info(f"Created energy log: {log.id} (Type: {simulation_type or 'normal'}, Manual: {is_manual})")
     return log
 
 
-def simulate_and_process(is_manual=False, user_id=None):
+def run_simulation_with_type(simulation_type=None, is_manual=False, user_id=None):
     """
-    Simulate a new reading, apply models, and backup if needed
+    Unified simulation function that handles all simulation types
 
     Args:
+        simulation_type: Type of simulation - None for normal, 'anomaly' for anomalous data,
+                        'abnormal_prediction' for abnormal prediction data
         is_manual: Flag if this is a manually triggered reading
         user_id: ID of the user who triggered the simulation
 
     Returns:
-        tuple: (log, is_anomaly, is_prediction_abnormal, backup_performed, reason)
+        tuple: (log_id, simulation_message)
     """
-    parser = argparse.ArgumentParser(description="Simulate energy system data")
-    parser.add_argument("--anomaly", action="store_true", help="Force anomalous data")
-    parser.add_argument("--abnormal-prediction", action="store_true", help="Generate data causing abnormal prediction")
-    parser.add_argument("--force-backup", action="store_true", help="Force backup regardless of conditions")
-    args = parser.parse_args()
-
-    # Get system settings
-    settings = get_system_settings()
-    min_threshold = settings.min_load_threshold
-    max_threshold = settings.max_load_threshold
+    logger.info(f"Running simulation with type: {simulation_type or 'normal'}")
 
     # Get the user if provided
     user = None
@@ -151,84 +140,79 @@ def simulate_and_process(is_manual=False, user_id=None):
         except User.DoesNotExist:
             logger.warning(f"User with ID {user_id} not found")
 
-    # 1. Create new record
-    log = create_energy_reading(args.anomaly, args.abnormal_prediction, is_manual, user)
-
-    # 2. Apply ML models
     try:
+        # 1. Create a new energy reading based on simulation type
+        log = create_energy_reading(simulation_type=simulation_type, is_manual=is_manual, user=user)
+        logger.info(f"Created new energy log with ID: {log.id}")
+
+        # 2. Apply ML models to the new reading
+        from ml.apply_models_to_record import apply_models_to_record
         is_anomaly, anomaly_score, predicted_load = apply_models_to_record(log.id)
 
-        # Reload the log to get updated values
-        log.refresh_from_db()
+        logger.info(f"Applied models to record {log.id}")
+        logger.info(f"Is anomaly: {is_anomaly}, Score: {anomaly_score}, Predicted next load: {predicted_load}")
 
-        # 3. Check predicted load
-        is_prediction_abnormal = (predicted_load is not None and
-                                  (predicted_load < min_threshold or
-                                   predicted_load > max_threshold))
+        # 3. The system will automatically decide if a backup is needed based on the
+        # logic in the apply_models_to_record function.
 
-        # 4. Determine backup reason
-        reason = None
-        if args.force_backup:
-            reason = "MANUAL"
-            logger.info("Manual backup requested via --force-backup flag")
-        elif is_anomaly:
-            reason = "ANOMALY"
-        elif is_prediction_abnormal:
-            reason = "PREDICTION"
-
-        # 5. Backup if needed
-        backup_performed = False
-
-        if reason:
-            # Only log message if we have a reason to backup
-            if reason == "ANOMALY":
-                logger.info(f"Anomaly detected (score: {anomaly_score}), triggering backup")
-            elif reason == "PREDICTION":
-                logger.info(f"Abnormal prediction detected ({predicted_load:.2f}W), triggering backup")
-            elif reason == "MANUAL":
-                logger.info(f"Manual backup requested")
-
-            # Perform backup
-            backup_performed = backup_database(log.id, force=(reason == "MANUAL"))
+        # 4. Determine the simulation message for the user
+        if simulation_type == 'anomaly':
+            message = "Симуляція аномалії"
+        elif simulation_type == 'abnormal_prediction':
+            message = "Симуляція аномального прогнозу"
         else:
-            logger.info(f"No issues detected (anomaly score: {anomaly_score}, prediction: {predicted_load:.2f}W)")
+            message = "Симуляція звичайних даних"
+
+        return log.id, message
 
     except Exception as e:
-        logger.error(f"Error processing log: {str(e)}")
-        is_anomaly = False
-        is_prediction_abnormal = False
-        backup_performed = False
-        reason = None
-
-    return log, is_anomaly, is_prediction_abnormal, backup_performed, reason
+        logger.error(f"Error during simulation: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return None, "Помилка симуляції"
 
 
 if __name__ == "__main__":
-    # Add command line arguments for manual flag and user ID
+    # Parse command line arguments
     parser = argparse.ArgumentParser(description="Simulate energy system data")
+    parser.add_argument("--type", choices=[None, 'normal', 'anomaly', 'abnormal_prediction'],
+                        default=None, help="Type of simulation data to generate")
     parser.add_argument("--manual", action="store_true", help="Mark as manual entry")
     parser.add_argument("--user", type=int, help="User ID who created this entry")
 
     args = parser.parse_args()
 
-    log, is_anomaly, is_prediction_abnormal, backup_performed, reason = simulate_and_process(
+    # Map 'normal' to None for function call
+    sim_type = None if args.type == 'normal' else args.type
+
+    # Run the simulation
+    log_id, message = run_simulation_with_type(
+        simulation_type=sim_type,
         is_manual=args.manual,
         user_id=args.user
     )
 
     print("\nSimulation summary:")
-    print(f"- Created energy log ID: {log.id}")
-    print(f"- Manual entry: {log.is_manual}")
-    if log.created_by:
-        print(f"- Created by: {log.created_by.username}")
-    print(f"- Anomaly detected: {is_anomaly}")
-    if log.is_anomaly and log.anomaly_reason:
-        print(f"- Anomaly reason: {log.anomaly_reason}")
-    if log.predicted_load is not None:
-        print(f"- Predicted next load: {log.predicted_load:.2f}W")
-        print(f"- Prediction abnormal: {is_prediction_abnormal}")
-    else:
-        print("- Predicted next load: None")
-    print(f"- Backup performed: {backup_performed}")
-    if backup_performed:
-        print(f"- Backup reason: {reason}")
+    print(f"- {message}")
+    print(f"- Created energy log ID: {log_id}")
+
+    # Get the updated log to show results
+    if log_id:
+        log = EnergyLog.objects.get(id=log_id)
+        print(f"- Manual entry: {log.is_manual}")
+        if log.created_by:
+            print(f"- Created by: {log.created_by.username}")
+        print(f"- Anomaly detected: {log.is_anomaly}")
+        if log.is_anomaly and log.anomaly_reason:
+            print(f"- Anomaly reason: {log.anomaly_reason}")
+        if log.predicted_load is not None:
+            print(f"- Predicted next load: {log.predicted_load:.2f}W")
+        else:
+            print("- Predicted next load: None")
+        print(f"- Backup triggered: {log.backup_triggered}")
+        if log.backup_triggered:
+            backups = log.backups.all()
+            if backups:
+                backup = backups.first()
+                print(f"- Backup reason: {backup.trigger_reason}")
+                print(f"- Backup created by: {backup.created_by.username if backup.created_by else 'System'}")

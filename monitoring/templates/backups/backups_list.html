@@ -11,13 +11,22 @@
             </div>
         </div>
 
+        {% if messages and user.profile.is_manager %}
+            {% for message in messages %}
+                <div class="alert alert-{{ message.tags }} alert-dismissible fade show">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+            {% endfor %}
+        {% endif %}
+
         <!-- Filters -->
         <div class="card shadow-sm mb-4">
             <div class="card-header bg-white py-3">
                 <h5 class="mb-0">Фільтри</h5>
             </div>
             <div class="card-body">
-                <form method="get" class="row g-3">
+                <form method="get" id="filters-form" class="row g-3">
                     <div class="col-md-3">
                         <label for="search" class="form-label">Пошук</label>
                         <div class="input-group">
@@ -131,7 +140,7 @@
                 <div>
                     {% if user.profile.is_manager %}
                         <button class="btn btn-sm btn-primary"
-                                hx-post="{% url 'force_backup' %}"
+                                hx-post="{% url 'force_backup' %}{% if request.GET %}?{{ request.GET.urlencode }}{% endif %}"
                                 hx-target="#backups-container"
                                 hx-indicator="#backups-indicator"
                                 hx-swap="innerHTML">
@@ -237,8 +246,23 @@
                 return new bootstrap.Tooltip(tooltipTriggerEl)
             });
 
-            document.body.addEventListener('statsUpdated', function (event) {
-                htmx.trigger('#backups-container', 'backupsUpdated');
+            // Setup listeners for filter changes
+            document.querySelectorAll('#filters-form select').forEach(select => {
+                select.addEventListener('change', function() {
+                    document.querySelector('#filters-form').submit();
+                });
+            });
+
+            // Handle HTMX events
+            document.body.addEventListener('htmx:afterOnLoad', function (event) {
+                // Reinitialize tooltips after HTMX updates the DOM
+                var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'))
+                var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+                    return new bootstrap.Tooltip(tooltipTriggerEl)
+                });
+
+                // Trigger a page reload to refresh all stats
+                window.location.reload();
             });
         });
     </script>

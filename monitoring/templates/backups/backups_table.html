@@ -75,14 +75,14 @@
                     {% if backup.status == 'SUCCESS' %}
                     <div class="btn-group btn-group-sm" role="group">
                         <button class="btn btn-outline-success" title="Відновити базу даних"
-                                hx-post="{% url 'restore_backup' backup.id %}"
-                                hx-confirm="Ви впевнені, що хочете відновити базу даних до цієї резервної копії? Всі поточні дані будуть замінені!"
+                                hx-post="{% url 'restore_backup' backup.id %}{% if request.GET %}?{{ request.GET.urlencode }}{% endif %}"
+                                hx-confirm="Ви впевнені, що хочете відновити дані енергосистеми до цієї резервної копії? Поточні записи енергосистеми будуть замінені!"
                                 hx-target="#backups-container"
                                 hx-swap="innerHTML">
                             <i class="bi bi-arrow-clockwise"></i>
                         </button>
                         <button class="btn btn-outline-danger" title="Видалити резервну копію"
-                                hx-post="{% url 'delete_backup' backup.id %}"
+                                hx-post="{% url 'delete_backup' backup.id %}{% if request.GET %}?{{ request.GET.urlencode }}{% endif %}"
                                 hx-confirm="Ви впевнені, що хочете видалити цю резервну копію? Це не можна буде скасувати."
                                 hx-target="#backups-container"
                                 hx-swap="innerHTML">
@@ -101,3 +101,83 @@
         </tbody>
     </table>
 </div>
+
+<!-- Pagination -->
+{% if page_obj.has_other_pages %}
+    <div class="card-footer bg-white d-flex justify-content-between align-items-center">
+        <div class="small text-muted">
+            Показано {{ page_obj.start_index }}-{{ page_obj.end_index }} із {{ page_obj.paginator.count }}
+            копій
+        </div>
+        <nav aria-label="Page navigation">
+            <ul class="pagination pagination-sm mb-0">
+                {% if page_obj.has_previous %}
+                    <li class="page-item">
+                        <a class="page-link"
+                           href="?page=1{% if search_query %}&q={{ search_query }}{% endif %}{% if status %}&status={{ status }}{% endif %}{% if reason %}&reason={{ reason }}{% endif %}{% if period %}&period={{ period }}{% endif %}"
+                           aria-label="First">
+                            <span aria-hidden="true">&laquo;&laquo;</span>
+                        </a>
+                    </li>
+                    <li class="page-item">
+                        <a class="page-link" href="?page=
+                                {{ page_obj.previous_page_number }}{% if search_query %}&q={{ search_query }}{% endif %}{% if status %}&status={{ status }}{% endif %}{% if reason %}&reason={{ reason }}{% endif %}{% if period %}&period={{ period }}{% endif %}"
+                           aria-label="Previous">
+                            <span aria-hidden="true">&laquo;</span>
+                        </a>
+                    </li>
+                {% else %}
+                    <li class="page-item disabled">
+                        <a class="page-link" href="#" aria-label="First">
+                            <span aria-hidden="true">&laquo;&laquo;</span>
+                        </a>
+                    </li>
+                    <li class="page-item disabled">
+                        <a class="page-link" href="#" aria-label="Previous">
+                            <span aria-hidden="true">&laquo;</span>
+                        </a>
+                    </li>
+                {% endif %}
+
+                {% for i in page_obj.paginator.page_range %}
+                    {% if page_obj.number == i %}
+                        <li class="page-item active"><a class="page-link" href="#">{{ i }}</a></li>
+                    {% elif i > page_obj.number|add:"-3" and i < page_obj.number|add:"3" %}
+                        <li class="page-item">
+                            <a class="page-link" href="?page=
+                                    {{ i }}{% if search_query %}&q={{ search_query }}{% endif %}{% if status %}&status={{ status }}{% endif %}{% if reason %}&reason={{ reason }}{% endif %}{% if period %}&period={{ period }}{% endif %}">{{ i }}</a>
+                        </li>
+                    {% endif %}
+                {% endfor %}
+
+                {% if page_obj.has_next %}
+                    <li class="page-item">
+                        <a class="page-link" href="?page=
+                                {{ page_obj.next_page_number }}{% if search_query %}&q={{ search_query }}{% endif %}{% if status %}&status={{ status }}{% endif %}{% if reason %}&reason={{ reason }}{% endif %}{% if period %}&period={{ period }}{% endif %}"
+                           aria-label="Next">
+                            <span aria-hidden="true">&raquo;</span>
+                        </a>
+                    </li>
+                    <li class="page-item">
+                        <a class="page-link" href="?page=
+                                {{ page_obj.paginator.num_pages }}{% if search_query %}&q={{ search_query }}{% endif %}{% if status %}&status={{ status }}{% endif %}{% if reason %}&reason={{ reason }}{% endif %}{% if period %}&period={{ period }}{% endif %}"
+                           aria-label="Last">
+                            <span aria-hidden="true">&raquo;&raquo;</span>
+                        </a>
+                    </li>
+                {% else %}
+                    <li class="page-item disabled">
+                        <a class="page-link" href="#" aria-label="Next">
+                            <span aria-hidden="true">&raquo;</span>
+                        </a>
+                    </li>
+                    <li class="page-item disabled">
+                        <a class="page-link" href="#" aria-label="Last">
+                            <span aria-hidden="true">&raquo;&raquo;</span>
+                        </a>
+                    </li>
+                {% endif %}
+            </ul>
+        </nav>
+    </div>
+{% endif %}

@@ -24,26 +24,37 @@ logs_dir = os.path.join(BASE_DIR, 'logs')
 os.makedirs(logs_dir, exist_ok=True)
 
 # Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.FileHandler(os.path.join(logs_dir, 'scheduler.log')),
+        logging.StreamHandler()
+    ]
+)
 logger = logging.getLogger('scheduler')
-# Clear any existing handlers to prevent duplication
-if logger.handlers:
-    logger.handlers = []
 
-logger.setLevel(logging.INFO)
-formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-
-# Add file handler
-file_handler = logging.FileHandler(os.path.join(logs_dir, 'scheduler.log'))
-file_handler.setFormatter(formatter)
-logger.addHandler(file_handler)
-
-# Add console handler
-console_handler = logging.StreamHandler()
-console_handler.setFormatter(formatter)
-logger.addHandler(console_handler)
-
-# Prevent propagation to root logger to avoid duplicated logs
-logger.propagate = False
+# # Configure logging
+# logger = logging.getLogger('scheduler')
+# # Clear any existing handlers to prevent duplication
+# if logger.handlers:
+#     logger.handlers = []
+#
+# logger.setLevel(logging.INFO)
+# formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+#
+# # Add file handler
+# file_handler = logging.FileHandler(os.path.join(logs_dir, 'scheduler.log'))
+# file_handler.setFormatter(formatter)
+# logger.addHandler(file_handler)
+#
+# # Add console handler
+# console_handler = logging.StreamHandler()
+# console_handler.setFormatter(formatter)
+# logger.addHandler(console_handler)
+#
+# # Prevent propagation to root logger to avoid duplicated logs
+# logger.propagate = False
 
 # Store active jobs for management
 active_jobs = {
@@ -123,7 +134,7 @@ def run_data_simulation():
         from ml.backup_database import backup_database, PREDICTED_LOAD_MIN, PREDICTED_LOAD_MAX
 
         # 1. Create a new energy reading
-        log = create_energy_reading(anomaly=False, abnormal_prediction=False)
+        log = create_energy_reading()
         logger.info(f"Created new energy log with ID: {log.id}")
 
         # 2. Apply ML models
@@ -498,95 +509,11 @@ def start_scheduler():
             time.sleep(5)
 
 
-# ml/scheduled_tasks.py (Update simulation functions)
-
-def simulate_with_anomaly(is_manual=False, user_id=None):
-    """Run simulation with forced anomaly"""
-    logger.info("Running simulation with forced anomaly")
-
-    try:
-        from ml.simulate_data import create_energy_reading
-        from ml.apply_models_to_record import apply_models_to_record
-
-        # Get user if provided
-        user = None
-        if user_id:
-            try:
-                from django.contrib.auth.models import User
-                user = User.objects.get(id=user_id)
-            except Exception as e:
-                logger.warning(f"Error getting user: {e}")
-
-        # Create anomalous data
-        log = create_energy_reading(anomaly=True, abnormal_prediction=False, is_manual=is_manual, user=user)
-        logger.info(f"Created anomalous energy log with ID: {log.id}")
-
-        # Apply ML models
-        is_anomaly, anomaly_score, predicted_load = apply_models_to_record(log.id)
-        logger.info(f"Applied models to record {log.id}")
-        logger.info(f"Is anomaly: {is_anomaly}, Score: {anomaly_score}, Predicted next load: {predicted_load}")
-
-        # Let system decide if backup is needed
-        # System will use ANOMALY reason automatically if an anomaly is detected
-
-        return log.id
-    except Exception as e:
-        logger.error(f"Error in simulate_with_anomaly: {e}")
-        import traceback
-        logger.error(traceback.format_exc())
-        return None
-
-
-def simulate_with_abnormal_prediction(is_manual=False, user_id=None):
-    """Run simulation with abnormal prediction"""
-    logger.info("Running simulation with abnormal prediction")
-
-    try:
-        from ml.simulate_data import create_energy_reading
-        from ml.apply_models_to_record import apply_models_to_record
-
-        # Get user if provided
-        user = None
-        if user_id:
-            try:
-                from django.contrib.auth.models import User
-                user = User.objects.get(id=user_id)
-            except Exception as e:
-                logger.warning(f"Error getting user: {e}")
-
-        # Create data that will lead to abnormal prediction, marking as manual if specified
-        log = create_energy_reading(anomaly=False, abnormal_prediction=True, is_manual=is_manual, user=user)
-        logger.info(f"Created log with abnormal prediction potential, ID: {log.id}")
-
-        # Apply ML models
-        is_anomaly, anomaly_score, predicted_load = apply_models_to_record(log.id)
-        logger.info(f"Applied models to record {log.id}")
-        logger.info(f"Is anomaly: {is_anomaly}, Score: {anomaly_score}, Predicted next load: {predicted_load}")
-
-        return log.id
-    except Exception as e:
-        logger.error(f"Error in simulate_with_abnormal_prediction: {e}")
-        import traceback
-        logger.error(traceback.format_exc())
-        return None
-
-
 if __name__ == "__main__":
     # Check if a command is provided
-    if len(sys.argv) > 1:
-        command = sys.argv[1]
-        if command == "anomaly":
-            # Run simulation with anomaly and exit
-            simulate_with_anomaly()
-            sys.exit(0)
-        elif command == "abnormal_prediction":
-            # Run simulation with abnormal prediction and exit
-            simulate_with_abnormal_prediction()
-            sys.exit(0)
-        elif command == "maintenance":
-            # Run maintenance tasks and exit
-            run_maintenance()
-            sys.exit(0)
+    if len(sys.argv) > 1 and sys.argv[1] == "maintenance":
+        run_maintenance()
+        sys.exit(0)
 
     # Otherwise start the regular scheduler
     start_scheduler()
