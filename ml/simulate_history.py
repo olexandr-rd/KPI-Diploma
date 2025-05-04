@@ -1,10 +1,9 @@
+# ml/simulate_history.py
 import os
 import django
 import numpy as np
 from datetime import timedelta, datetime
 from django.utils import timezone
-
-# from ml.apply_models_to_record import apply_models_to_record
 
 # Django setup
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'Diploma.settings')
@@ -29,7 +28,7 @@ for i in range(num_entries):
     dc_battery_voltage = np.random.normal(24, 1)
     dc_battery_current = np.random.normal(10, 2)
     load_power = abs(np.sin(i / 10.0) * 2500 + np.random.normal(0, 100))
-    temperature = np.random.normal(35, 2)
+    temperature = np.random.normal(35, 2)  # Battery temperature
 
     # Save to DB
     EnergyLog.objects.create(
@@ -40,6 +39,5 @@ for i in range(num_entries):
         load_power=load_power,
         temperature=temperature
     )
-    # apply_models_to_record()
 
 print(f"Simulated {num_entries} inverter logs.")

@@ -3,7 +3,6 @@
 import os
 import django
 import pandas as pd
-import numpy as np
 import joblib
 import sys
 from pathlib import Path
@@ -18,22 +17,6 @@ django.setup()
 from monitoring.models import EnergyLog, SystemSettings
 
 
-def get_system_settings():
-    """Get system settings for thresholds"""
-    try:
-        settings = SystemSettings.objects.first()
-        if settings:
-            return settings
-    except Exception:
-        pass
-
-    # Default values if settings not found
-    return type('obj', (object,), {
-        'min_load_threshold': 500,
-        'max_load_threshold': 2000,
-    })
-
-
 def get_anomaly_explanation(features, feature_scores):
     """
     Generate a human-readable explanation for an anomaly
@@ -43,64 +26,29 @@ def get_anomaly_explanation(features, feature_scores):
         feature_scores: Dictionary of feature contribution scores
 
     Returns:
-        str: Explanation of the anomaly
+        str: Explanation as an array of top contributing parameters
     """
-    settings = get_system_settings()
-
     # Get the most suspicious features (highest absolute score)
     suspicious_features = sorted(feature_scores.items(), key=lambda x: abs(x[1]), reverse=True)
 
-    explanations = []
+    explanation = ''
 
-    # Check each feature for potential issues
-    for feature, score in suspicious_features[:2]:  # Top 2 contributing features
-        if feature == 'ac_output_voltage':
-            if features['ac_output_voltage'].values[0] < 210:
-                explanations.append(f"Надто низька вихідна напруга")
-            elif features['ac_output_voltage'].values[0] > 250:
-                explanations.append(f"Надто висока вихідна напруга")
+    # Map feature names to Ukrainian names
+    feature_name_map = {
+        'ac_output_voltage': 'Вихідна напруга',
+        'dc_battery_voltage': 'Напруга акамулятора',
+        'dc_battery_current': 'Струм акамулятора',
+        'load_power': 'Потужність',
+        'temperature': 'Температура'
+    }
 
-        elif feature == 'dc_battery_voltage':
-            if features['dc_battery_voltage'].values[0] < 22:
-                explanations.append(f"Критично низький заряд батареї")
-            elif features['dc_battery_voltage'].values[0] > 28:
-                explanations.append(f"Перевищення напруги батареї")
+    # Get an explanation for a random feature if there is more than 1
+    import random
+    if suspicious_features:
+        feature, score = random.choice(suspicious_features) if len(suspicious_features) > 1 else suspicious_features[0]
+        explanation = feature_name_map.get(feature, feature)
 
-        elif feature == 'dc_battery_current':
-            if features['dc_battery_current'].values[0] > 15:
-                explanations.append(f"Високий струм батареї")
-            elif features['dc_battery_current'].values[0] < 5:
-                explanations.append(f"Низький струм батареї")
-
-        elif feature == 'load_power':
-            if features['load_power'].values[0] < settings.min_load_threshold:
-                explanations.append(f"Критично низьке навантаження")
-            elif features['load_power'].values[0] > settings.max_load_threshold:
-                explanations.append(f"Перевантаження системи")
-
-        elif feature == 'temperature':
-            if features['temperature'].values[0] > 45:
-                explanations.append(f"Перегрів системи")
-            elif features['temperature'].values[0] < 10:
-                explanations.append(f"Надто низька температура")
-
-    # If no specific issues found, provide a general explanation
-    if not explanations:
-        top_feature = suspicious_features[0][0] if suspicious_features else None
-        if top_feature:
-            feature_name_map = {
-                'ac_output_voltage': 'вихідна напруга',
-                'dc_battery_voltage': 'напруга батареї',
-                'dc_battery_current': 'струм батареї',
-                'load_power': 'навантаження',
-                'temperature': 'температура'
-            }
-            feature_name = feature_name_map.get(top_feature, top_feature)
-            explanations.append(f"Нетипове значення параметра: {feature_name}")
-        else:
-            explanations.append("Незвичайна комбінація параметрів")
-
-    return ", ".join(explanations)
+    return explanation
 
 
 def calculate_feature_scores(model, features):
@@ -134,6 +82,30 @@ def calculate_feature_scores(model, features):
     return feature_scores
 
 
+def check_prediction_thresholds(predicted_current, predicted_voltage):
+    """
+    Check if predicted values are within normal ranges
+
+    Args:
+        predicted_current: Predicted battery current value
+        predicted_voltage: Predicted AC output voltage value
+
+    Returns:
+        bool: True if predictions are abnormal
+    """
+    # Normal ranges for parameters
+    current_min, current_max = 5, 15  # A
+    voltage_min, voltage_max = 220, 240  # V
+
+    # Check if predictions are outside normal ranges
+    if predicted_current < current_min or predicted_current > current_max:
+        return True
+    if predicted_voltage < voltage_min or predicted_voltage > voltage_max:
+        return True
+
+    return False
+
+
 def apply_models_to_record(record_id=None):
     """
     Apply ML models to a single energy record or the latest if no ID provided
@@ -143,7 +115,7 @@ def apply_models_to_record(record_id=None):
         record_id: ID of record to analyze, or None for latest
 
     Returns:
-        tuple: (is_anomaly, anomaly_score, predicted_load)
+        tuple: (is_anomaly, anomaly_score, predicted_current, predicted_voltage)
     """
     # Load models
     model_dir = os.path.join(BASE_DIR, 'ml/model')
@@ -189,62 +161,58 @@ def apply_models_to_record(record_id=None):
     is_anomaly = anomaly_pred == -1
 
     # Get explanation if it's an anomaly
-    anomaly_reason = None
+    anomaly_reasons = []
     if is_anomaly:
         try:
             # Calculate feature scores
             feature_scores = calculate_feature_scores(anomaly_model, features)
 
             # Get human-readable explanation
-            anomaly_reason = get_anomaly_explanation(features, feature_scores)
+            anomaly_reasons = get_anomaly_explanation(features, feature_scores)
         except Exception as e:
             print(f"Error generating anomaly explanation: {str(e)}")
-            anomaly_reason = "Виявлено аномалію"
+            anomaly_reasons = ["Виявлено аномалію"]
 
     # Update record with anomaly results
     record.is_anomaly = is_anomaly
     record.anomaly_score = anomaly_score
-    record.anomaly_reason = anomaly_reason
+    record.anomaly_reason = str(anomaly_reasons) if anomaly_reasons else None
     record.save()
 
-    # === Load Forecasting ===
-    # For the current record, predict what the next load will be
-    predicted_next_load = forecast_model.predict(features)[0]
+    # === Prediction ===
+    # Predict NEXT battery current and AC output voltage
+    # The model expects the same feature format and returns [next_current, next_voltage]
+    prediction = forecast_model.predict(features)[0]
+    predicted_current, predicted_voltage = prediction[0], prediction[1]
 
-    # Get the thresholds from system settings
-    settings = get_system_settings()
-    min_threshold = settings.min_load_threshold
-    max_threshold = settings.max_load_threshold
+    # Check if predictions are within normal ranges
+    is_abnormal_prediction = check_prediction_thresholds(predicted_current, predicted_voltage)
 
-    # Log the prediction and thresholds to debug
-    print(f"Predicted next load: {predicted_next_load}, Thresholds: Min={min_threshold}, Max={max_threshold}")
-
-    # Explicitly check if the prediction is outside thresholds
-    is_prediction_abnormal = (predicted_next_load < min_threshold or predicted_next_load > max_threshold)
-    if is_prediction_abnormal:
-        print(f"ABNORMAL PREDICTION DETECTED: {predicted_next_load} is outside range [{min_threshold}-{max_threshold}]")
-
-    # Update the current record with the prediction for the NEXT load
-    record.predicted_load = predicted_next_load
+    # Update record with prediction results
+    record.predicted_current = predicted_current
+    record.predicted_voltage = predicted_voltage
+    record.is_abnormal_prediction = is_abnormal_prediction
     record.save()
 
-    # After applying models and saving the record, explicitly check if we need to create a backup
-    # This ensures that anomalies and abnormal predictions trigger backups as expected
-    if is_anomaly or is_prediction_abnormal:
+    # After applying models and saving the record, check if we need to create a backup
+    if is_anomaly or is_abnormal_prediction:
         try:
             from ml.backup_database import check_and_backup_if_needed
             backup_performed = check_and_backup_if_needed(record.id)
             if backup_performed:
-                print(f"Backup created for record {record.id} due to {'anomaly' if is_anomaly else 'abnormal prediction'}")
+                print(
+                    f"Backup created for record {record.id} due to {'anomaly' if is_anomaly else 'abnormal prediction'}")
         except Exception as e:
             print(f"Error triggering backup for record {record.id}: {e}")
 
     print(f"Applied models to record {record.id}")
-    print(f"Is anomaly: {is_anomaly}, Score: {anomaly_score}, Predicted next load: {predicted_next_load}")
-    if anomaly_reason:
-        print(f"Anomaly reason: {anomaly_reason}")
+    print(f"Is anomaly: {is_anomaly}, Score: {anomaly_score}")
+    if anomaly_reasons:
+        print(f"Anomaly reasons: {anomaly_reasons}")
+    print(f"Predicted NEXT current: {predicted_current:.2f}A, Predicted NEXT voltage: {predicted_voltage:.2f}V")
+    print(f"Is abnormal prediction: {is_abnormal_prediction}")
 
-    return is_anomaly, anomaly_score, predicted_next_load
+    return is_anomaly, anomaly_score, predicted_current, predicted_voltage
 
 
 if __name__ == "__main__":

@@ -105,37 +105,6 @@
                                 </div>
                             </div>
 
-                            <hr>
-                            <h6 class="text-primary mb-3">Порогові значення навантаження</h6>
-
-                            <div class="row mb-3">
-                                <div class="col-md-6">
-                                    <label for="{{ form.min_load_threshold.id_for_label }}" class="form-label">
-                                        Мінімальне допустиме навантаження (Вт)
-                                    </label>
-                                    {{ form.min_load_threshold }}
-                                    {% if form.min_load_threshold.errors %}
-                                        <div class="text-danger small">{{ form.min_load_threshold.errors }}</div>
-                                    {% endif %}
-                                    <div class="form-text small text-muted">
-                                        Поріг для виявлення надто низького навантаження
-                                    </div>
-                                </div>
-
-                                <div class="col-md-6">
-                                    <label for="{{ form.max_load_threshold.id_for_label }}" class="form-label">
-                                        Максимальне допустиме навантаження (Вт)
-                                    </label>
-                                    {{ form.max_load_threshold }}
-                                    {% if form.max_load_threshold.errors %}
-                                        <div class="text-danger small">{{ form.max_load_threshold.errors }}</div>
-                                    {% endif %}
-                                    <div class="form-text small text-muted">
-                                        Поріг для виявлення перевантаження
-                                    </div>
-                                </div>
-                            </div>
-
                             <div class="mt-4 d-flex justify-content-between">
                                 <a href="{% url 'dashboard' %}" class="btn btn-secondary">
                                     <i class="bi bi-arrow-left"></i> Назад

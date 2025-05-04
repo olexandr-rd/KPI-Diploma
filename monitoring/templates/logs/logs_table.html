@@ -5,11 +5,11 @@
         <tr>
             <th>ID</th>
             <th>Час</th>
-            <th>Навантаження (Вт)</th>
-            <th>Прогнозоване (Вт)</th>
+            <th>Потужність (Вт)</th>
             <th>Тип</th>
             <th>Аномалія</th>
             <th>Пояснення аномалії</th>
+            <th>Передбачена аномалія</th>
             <th>Резервна копія</th>
             <th>Деталі</th>
         </tr>
@@ -20,7 +20,6 @@
                 <td>{{ log.id }}</td>
                 <td>{{ log.timestamp|date:"d.m.Y H:i:s" }}</td>
                 <td>{{ log.load_power|floatformat:2 }}</td>
-                <td>{{ log.predicted_load|default:"-"|floatformat:2 }}</td>
                 <td>
                     {% if log.is_manual %}
                         <span class="badge bg-info text-white"><i
@@ -46,6 +45,13 @@
                         {% endif %}
                     {% else %}
                         <span class="text-muted">Не виявлено</span>
+                    {% endif %}
+                </td>
+                            <td>
+                    {% if log.is_abnormal_prediction %}
+                        <span class="badge bg-danger">Так</span>
+                    {% else %}
+                        <span class="badge bg-success">Ні</span>
                     {% endif %}
                 </td>
                 <td>

@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 
 from django.utils import timezone
 
-from . import get_stats
+# from . import get_stats
 from ..models import BackupLog, UserProfile, SystemSettings, EnergyLog
 
 

@@ -4,9 +4,9 @@
         <thead class="table-light">
             <tr>
                 <th>Час</th>
-                <th>Навантаження (Вт)</th>
-                <th>Прогнозоване (Вт)</th>
+                <th>Потужність (Вт)</th>
                 <th>Аномалія</th>
+                <th>Передбачена аномалія</th>
                 <th>Резервна копія</th>
             </tr>
         </thead>
@@ -15,9 +15,15 @@
             <tr class="{% if log.is_anomaly %}table-danger{% endif %}">
                 <td>{{ log.timestamp|date:"H:i, d.m.Y" }}</td>
                 <td>{{ log.load_power|floatformat:2 }}</td>
-                <td>{{ log.predicted_load|default:"–"|floatformat:2 }}</td>
                 <td>
                     {% if log.is_anomaly %}
+                        <span class="badge bg-danger">Так</span>
+                    {% else %}
+                        <span class="badge bg-success">Ні</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if log.is_abnormal_prediction %}
                         <span class="badge bg-danger">Так</span>
                     {% else %}
                         <span class="badge bg-success">Ні</span>

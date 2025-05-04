@@ -24,7 +24,7 @@ os.makedirs(backups_dir, exist_ok=True)
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'Diploma.settings')
 django.setup()
 
-from django.conf import settings
+from django.conf import settings as django_settings
 from monitoring.models import EnergyLog, BackupLog, SystemSettings
 
 # Configure logging
@@ -38,31 +38,64 @@ logging.basicConfig(
 )
 logger = logging.getLogger('backup')
 
-# Default threshold for predicted load
-PREDICTED_LOAD_MIN = 500  # Minimum acceptable predicted load
-PREDICTED_LOAD_MAX = 2000  # Maximum acceptable predicted load
-
-
-def update_thresholds(min_load, max_load):
-    """Update the threshold values for predicted load"""
-    global PREDICTED_LOAD_MIN, PREDICTED_LOAD_MAX
-    PREDICTED_LOAD_MIN = min_load
-    PREDICTED_LOAD_MAX = max_load
-    logger.info(f"Updated load thresholds: Min={min_load}W, Max={max_load}W")
-
 
 def load_system_settings():
-    """Load threshold values from system settings"""
+    """Load system settings"""
     try:
         settings = SystemSettings.objects.first()
         if settings:
-            update_thresholds(settings.min_load_threshold, settings.max_load_threshold)
-            logger.info("Loaded threshold values from system settings")
+            logger.info("Loaded system settings")
             return settings
     except Exception as e:
         logger.error(f"Error loading system settings: {str(e)}")
 
     return None
+
+
+def check_and_backup_if_needed(record_id):
+    """
+    Check if a record needs a backup and perform it if needed
+
+    Args:
+        record_id: ID of the record to check
+
+    Returns:
+        bool: True if backup was needed and performed, False otherwise
+    """
+    logger.info(f"Checking if record {record_id} needs backup")
+
+    try:
+        # Get the record
+        record = EnergyLog.objects.get(id=record_id)
+
+        # Check if record is already backed up
+        if record.backup_triggered:
+            logger.info(f"Record {record_id} is already backed up")
+            return False
+
+        # Check conditions for backup
+        is_anomalous = record.is_anomaly
+        has_abnormal_prediction = record.is_abnormal_prediction
+
+        # Determine if backup is needed
+        need_backup = is_anomalous or has_abnormal_prediction
+
+        if need_backup:
+            # Determine reason
+            reason = "ANOMALY" if is_anomalous else "PREDICTION"
+
+            # Perform backup
+            logger.info(f"Backup needed for record {record_id}. Reason: {reason}")
+            backup_performed = backup_database(record_id=record_id, reason=reason)
+
+            return backup_performed
+        else:
+            logger.info(f"No backup needed for record {record_id}")
+            return False
+
+    except Exception as e:
+        logger.error(f"Error checking if backup needed for record {record_id}: {str(e)}")
+        return False
 
 
 def cleanup_old_backups():
@@ -153,73 +186,9 @@ def create_scheduled_backup():
         return False
 
 
-def check_and_backup_if_needed(record_id):
-    """
-    Check if a record needs a backup and perform it if needed
-
-    Args:
-        record_id: ID of the record to check
-
-    Returns:
-        bool: True if backup was needed and performed, False otherwise
-    """
-    logger.info(f"Checking if record {record_id} needs backup")
-
-    # Load system settings
-    settings = load_system_settings()
-
-    try:
-        # Get the record
-        record = EnergyLog.objects.get(id=record_id)
-
-        # Check if record is already backed up
-        if record.backup_triggered:
-            logger.info(f"Record {record_id} is already backed up")
-            return False
-
-        # Check conditions for backup
-        is_anomalous = record.is_anomaly
-        predicted_load_abnormal = False
-
-        # Get current thresholds from settings
-        min_threshold = settings.min_load_threshold if settings else PREDICTED_LOAD_MIN
-        max_threshold = settings.max_load_threshold if settings else PREDICTED_LOAD_MAX
-
-        # Check the prediction
-        if record.predicted_load is not None:
-            if record.predicted_load < min_threshold or record.predicted_load > max_threshold:
-                predicted_load_abnormal = True
-                logger.info(
-                    f"Predicted load {record.predicted_load:.2f}W is outside normal range ({min_threshold}-{max_threshold}W)")
-
-        # Determine if backup is needed
-        need_backup = is_anomalous or predicted_load_abnormal
-
-        if need_backup:
-            # Determine reason
-            reason = "ANOMALY" if is_anomalous else "PREDICTION"
-
-            # Perform backup
-            logger.info(f"Backup needed for record {record_id}. Reason: {reason}")
-            backup_performed = backup_database(record_id=record_id, reason=reason)
-
-            return backup_performed
-        else:
-            logger.info(f"No backup needed for record {record_id}")
-            return False
-
-    except Exception as e:
-        logger.error(f"Error checking if backup needed for record {record_id}: {str(e)}")
-        return False
-
-
 def backup_database(record_id=None, force=False, reason=None, user=None):
     """
-    Create a backup of the PostgreSQL database if:
-    1. Record is anomalous OR
-    2. Predicted load is outside normal range OR
-    3. Force parameter is True OR
-    4. Specific reason is provided
+    Create a backup of the PostgreSQL database
 
     Args:
         record_id: ID of record to check, or None for no association
@@ -230,8 +199,6 @@ def backup_database(record_id=None, force=False, reason=None, user=None):
     Returns:
         bool: True if backup was performed
     """
-    # Load system settings
-    settings = load_system_settings()
 
     # Determine backup reason
     trigger_reason = reason
@@ -243,18 +210,7 @@ def backup_database(record_id=None, force=False, reason=None, user=None):
 
         # Check all conditions that might trigger a backup
         is_anomalous = record.is_anomaly
-        predicted_load_abnormal = False
-
-        # Get current thresholds from settings
-        min_threshold = settings.min_load_threshold if settings else PREDICTED_LOAD_MIN
-        max_threshold = settings.max_load_threshold if settings else PREDICTED_LOAD_MAX
-
-        # Check the prediction
-        if record.predicted_load is not None:
-            if record.predicted_load < min_threshold or record.predicted_load > max_threshold:
-                predicted_load_abnormal = True
-                logger.info(
-                    f"Predicted load {record.predicted_load:.2f}W is outside normal range ({min_threshold}-{max_threshold}W)")
+        has_abnormal_prediction = record.is_abnormal_prediction
 
         # Determine trigger reason in clear priority order
         if force:
@@ -265,13 +221,13 @@ def backup_database(record_id=None, force=False, reason=None, user=None):
             pass
         elif is_anomalous:
             trigger_reason = "ANOMALY"
-        elif predicted_load_abnormal:
+        elif has_abnormal_prediction:
             trigger_reason = "PREDICTION"
 
         # If no reason to back up and not forced, exit
         if trigger_reason is None and not force:
             logger.info(
-                f"Record {record.id} does not need backup (anomaly={is_anomalous}, pred_load_abnormal={predicted_load_abnormal})")
+                f"Record {record.id} does not need backup (anomaly={is_anomalous}, abnormal_prediction={has_abnormal_prediction})")
             return False
     else:
         # No record provided, must have force or reason
@@ -286,8 +242,7 @@ def backup_database(record_id=None, force=False, reason=None, user=None):
             logger.info("No record, force, or reason provided for backup")
             return False
 
-    # Get database settings from Django settings, not from the SystemSettings model
-    from django.conf import settings as django_settings
+    # Get database settings from Django settings
     db_settings = django_settings.DATABASES['default']
 
     # Create backup filename with timezone-aware timestamp
@@ -376,24 +331,15 @@ def backup_database(record_id=None, force=False, reason=None, user=None):
             error_msg = stderr.decode('utf-8')
             logger.error(f"Backup failed: {error_msg}")
 
-            # If we have an existing record, update it instead of creating a new one
-            if existing_backup:
-                existing_backup.status = "FAILED"
-                existing_backup.error_message = error_msg[:255]  # Truncate if needed
-                existing_backup.save()
-                backup_log = existing_backup
-                logger.info(f"Updated existing backup log {existing_backup.id} to FAILED")
-            else:
-                # Create failed backup log entry
-                backup_log = BackupLog.objects.create(
-                    backup_file=backup_filename,
-                    status="FAILED",
-                    size_kb=0,
-                    trigger_reason=trigger_reason or "UNKNOWN",
-                    error_message=error_msg[:255],  # Truncate if needed
-                    created_by=user
-                )
-                logger.info(f"Created new FAILED backup log with ID {backup_log.id}")
+            # Create failed backup log entry
+            backup_log = BackupLog.objects.create(
+                backup_file=backup_filename,
+                status="FAILED",
+                size_kb=0,
+                trigger_reason=trigger_reason or "UNKNOWN",
+                error_message=error_msg[:255],  # Truncate if needed
+                created_by=user
+            )
 
             # Associate backup with the triggering record if provided
             if record:
@@ -404,29 +350,21 @@ def backup_database(record_id=None, force=False, reason=None, user=None):
     except Exception as e:
         logger.error(f"Exception during backup: {str(e)}")
 
-        # Update existing record if available
-        if existing_backup:
-            existing_backup.status = "FAILED"
-            existing_backup.error_message = str(e)[:255]  # Truncate if needed
-            existing_backup.save()
-            logger.info(f"Updated existing backup log {existing_backup.id} to FAILED")
-        else:
-            # Create failed backup log entry
-            try:
-                backup_log = BackupLog.objects.create(
-                    backup_file=backup_filename,
-                    status="FAILED",
-                    size_kb=0,
-                    trigger_reason=trigger_reason or "UNKNOWN",
-                    error_message=str(e)[:255],  # Truncate if needed
-                    created_by=user
-                )
-                # Associate backup with the triggering record if provided
-                if record:
-                    backup_log.triggered_by.add(record)
-                logger.info(f"Created new FAILED backup log with ID {backup_log.id}")
-            except Exception as inner_e:
-                logger.error(f"Failed to log backup failure: {str(inner_e)}")
+        # Create failed backup log entry
+        try:
+            backup_log = BackupLog.objects.create(
+                backup_file=backup_filename,
+                status="FAILED",
+                size_kb=0,
+                trigger_reason=trigger_reason or "UNKNOWN",
+                error_message=str(e)[:255],  # Truncate if needed
+                created_by=user
+            )
+            # Associate backup with the triggering record if provided
+            if record:
+                backup_log.triggered_by.add(record)
+        except Exception as inner_e:
+            logger.error(f"Failed to log backup failure: {str(inner_e)}")
 
         return False
 
@@ -441,7 +379,6 @@ def restore_database(backup_filename):
     Returns:
         tuple: (success, message)
     """
-    from django.conf import settings
     import tempfile
     import re
 
@@ -456,7 +393,7 @@ def restore_database(backup_filename):
         return False, error_msg
 
     # Get database settings
-    db_settings = settings.DATABASES['default']
+    db_settings = django_settings.DATABASES['default']
 
     try:
         # Create a temporary file to hold only the energy logs data

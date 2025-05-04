@@ -28,8 +28,6 @@ class SystemSettingsForm(forms.ModelForm):
             'backup_frequency_hours',
             'backup_retention_days',
             'max_backups',
-            'min_load_threshold',
-            'max_load_threshold',
             'max_energy_logs',
             'maintenance_time',
         ]
@@ -38,17 +36,13 @@ class SystemSettingsForm(forms.ModelForm):
             'backup_frequency_hours': forms.NumberInput(attrs={'class': 'form-control', 'min': '1', 'max': '168'}),
             'backup_retention_days': forms.NumberInput(attrs={'class': 'form-control', 'min': '1', 'max': '365'}),
             'max_backups': forms.NumberInput(attrs={'class': 'form-control', 'min': '1', 'max': '100'}),
-            'min_load_threshold': forms.NumberInput(attrs={'class': 'form-control', 'min': '0', 'max': '5000'}),
-            'max_load_threshold': forms.NumberInput(attrs={'class': 'form-control', 'min': '0', 'max': '5000'}),
             'max_energy_logs': forms.NumberInput(attrs={'class': 'form-control', 'min': '100', 'max': '50000'}),
             'maintenance_time': forms.TimeInput(attrs={'class': 'form-control', 'type': 'time'}),
         }
 
 
 def manager_required(view_function=None, *, redirect_url='dashboard', message=None):
-    """
-    Decorator to verify that a user has a manager role.
-    """
+    """Decorator to verify that a user has a manager role."""
 
     def decorator(view_func):
         @wraps(view_func)
@@ -73,6 +67,7 @@ def manager_required(view_function=None, *, redirect_url='dashboard', message=No
         return decorator(view_function)
     return decorator
 
+
 @login_required
 @manager_required(message="У вас немає доступу до налаштувань планувальника.")
 def system_settings(request):
@@ -90,17 +85,7 @@ def system_settings(request):
                 settings_obj.modified_by = request.user
                 settings_obj.save()
 
-                # Update constants in backup_database.py
-                try:
-                    from ml.backup_database import update_thresholds
-                    update_thresholds(
-                        settings_obj.min_load_threshold,
-                        settings_obj.max_load_threshold
-                    )
-                    messages.success(request, "Налаштування планувальника успішно оновлено.")
-                except Exception as e:
-                    messages.warning(request,
-                                     f"Налаштування збережено, але не вдалося оновити пороги навантаження: {str(e)}")
+                messages.success(request, "Налаштування планувальника успішно оновлено.")
 
             return redirect('system_settings')
     else:

@@ -1,0 +1,37 @@
+<!-- monitoring/templates/analytics/anomaly_parameter_table.html -->
+{% load template_filters %}
+
+{% if parameter_counts %}
+    <div class="table-responsive">
+        <table class="table table-sm table-hover">
+            <thead>
+                <tr>
+                    <th>Параметр</th>
+                    <th>Кількість</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for param, count in parameter_counts.items %}
+                <tr>
+                    <td>{{ param }}</td>
+                    <td>
+                        <div class="d-flex align-items-center">
+                            <span class="me-3">{{ count }}</span>
+                            <div class="progress flex-grow-1" style="height: 8px;">
+                                <div class="progress-bar bg-danger" role="progressbar"
+                                    style="width: {{ count|mul:100|div:max_count|floatformat:0 }}%">
+                                </div>
+                            </div>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+{% else %}
+    <div class="text-center py-4 text-muted">
+        <i class="bi bi-emoji-smile fs-1"></i>
+        <p class="mt-3">Аномалій не виявлено за обраний період</p>
+    </div>
+{% endif %}

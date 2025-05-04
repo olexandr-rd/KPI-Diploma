@@ -36,8 +36,8 @@ admin.site.register(User, UserAdmin)
 # Register other models
 @admin.register(EnergyLog)
 class EnergyLogAdmin(admin.ModelAdmin):
-    list_display = ('timestamp', 'load_power', 'predicted_load', 'is_anomaly', 'is_manual', 'created_by')
-    list_filter = ('is_anomaly', 'is_manual', 'backup_triggered')
+    list_display = ('timestamp', 'load_power', 'predicted_current', 'predicted_voltage', 'is_anomaly', 'is_abnormal_prediction', 'is_manual', 'created_by')
+    list_filter = ('is_anomaly', 'is_manual', 'backup_triggered', 'is_abnormal_prediction')
     search_fields = ('anomaly_reason',)
     readonly_fields = ('timestamp',)
 
@@ -53,7 +53,7 @@ class BackupLogAdmin(admin.ModelAdmin):
 @admin.register(SystemSettings)
 class SystemSettingsAdmin(admin.ModelAdmin):
     list_display = ('id', 'backup_frequency_hours', 'backup_retention_days', 'max_backups',
-                    'min_load_threshold', 'max_load_threshold', 'last_modified', 'modified_by')
+                    'max_energy_logs', 'last_modified', 'modified_by')
     readonly_fields = ('last_modified',)
 
     def has_add_permission(self, request):

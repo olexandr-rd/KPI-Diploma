@@ -20,7 +20,7 @@ os.makedirs(logs_dir, exist_ok=True)
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'Diploma.settings')
 django.setup()
 
-from monitoring.models import EnergyLog, SystemSettings
+from monitoring.models import EnergyLog
 from django.contrib.auth.models import User
 
 # Configure logging
@@ -33,22 +33,6 @@ logging.basicConfig(
     ]
 )
 logger = logging.getLogger('simulation')
-
-
-def get_system_settings():
-    """Get system settings for thresholds"""
-    try:
-        settings = SystemSettings.objects.first()
-        if settings:
-            return settings
-    except Exception:
-        pass
-
-    # Default values if settings not found
-    return type('obj', (object,), {
-        'min_load_threshold': 500,
-        'max_load_threshold': 2000,
-    })
 
 
 def create_energy_reading(simulation_type=None, is_manual=False, user=None):
@@ -79,27 +63,47 @@ def create_energy_reading(simulation_type=None, is_manual=False, user=None):
             np.random.normal(3500, 300),  # Overload
             np.random.normal(10, 5)  # Almost no load
         ])
-        temperature = np.random.normal(55, 5)  # High temperature
+        temperature = np.random.normal(55, 5)  # High battery temperature
     elif simulation_type == 'abnormal_prediction':
-        # Create data that will lead to abnormal prediction but not trigger anomaly detector
-        # These values should be within "normal" ranges but in combinations that lead to
-        # extreme predicted values in the next step
-        ac_output_voltage = np.random.normal(230, 2)  # Normal voltage
-        dc_battery_voltage = np.random.normal(24, 0.3)  # Normal battery
-        dc_battery_current = np.random.normal(10, 0.5)  # Normal current
 
-        # The key factor - we want to create a trend that will lead to prediction outside normal range
-        # But not so extreme that it triggers anomaly detection
-        load_power = np.random.normal(1800, 50)  # High but not anomalous load
+        # Create a scenario that's near normal but will push the prediction out of bounds
+        scenario = np.random.choice(['low_current', 'high_current', 'low_voltage', 'high_voltage'])
 
-        temperature = np.random.normal(38, 1)  # Slightly high temperature
+        if scenario == 'low_current':
+            # This should predict a very low battery current (below 5A)
+            ac_output_voltage = np.random.normal(229, 1)  # Near lower end of normal voltage
+            dc_battery_voltage = np.random.normal(23.5, 0.2)  # Lower battery voltage
+            dc_battery_current = np.random.normal(5.5, 0.3)  # Near lower end of normal current
+            load_power = np.random.normal(800, 50)  # Low load tends to correlate with low current
+            temperature = np.random.normal(37, 1)  # Slightly above normal temp
+        elif scenario == 'high_current':
+            # This should predict a very high battery current (above 15A)
+            ac_output_voltage = np.random.normal(231, 1)  # Near upper end of normal voltage
+            dc_battery_voltage = np.random.normal(24.5, 0.2)  # Higher battery voltage
+            dc_battery_current = np.random.normal(14.5, 0.3)  # Near upper end of normal current
+            load_power = np.random.normal(1800, 50)  # High load tends to correlate with high current
+            temperature = np.random.normal(38, 1)  # Higher temperature
+        elif scenario == 'low_voltage':
+            # This should predict a very low AC voltage (below 220V)
+            ac_output_voltage = np.random.normal(221, 1)  # Near lower end of normal voltage
+            dc_battery_voltage = np.random.normal(23.8, 0.2)  # Lower battery voltage
+            dc_battery_current = np.random.normal(9, 0.5)  # Normal current
+            load_power = np.random.normal(1000, 100)  # Normal load
+            temperature = np.random.normal(36, 1)  # Normal temperature
+        else:  # high_voltage
+            # This should predict a very high AC voltage (above 240V)
+            ac_output_voltage = np.random.normal(239, 1)  # Near upper end of normal voltage
+            dc_battery_voltage = np.random.normal(24.2, 0.2)  # Higher battery voltage
+            dc_battery_current = np.random.normal(11, 0.5)  # Normal current
+            load_power = np.random.normal(1500, 100)  # Normal load
+            temperature = np.random.normal(39, 1)  # Slightly higher temperature
     else:
         # Create normal data
         ac_output_voltage = np.random.normal(230, 3)
         dc_battery_voltage = np.random.normal(24, 0.5)
         dc_battery_current = np.random.normal(10, 1)
-        load_power = np.random.normal(1250, 150)  # Middle of normal range
-        temperature = np.random.normal(35, 1)
+        load_power = np.random.normal(1250, 150)  # Normal power range
+        temperature = np.random.normal(35, 1)  # Normal battery temperature
 
     # Save to DB
     log = EnergyLog.objects.create(
@@ -147,10 +151,11 @@ def run_simulation_with_type(simulation_type=None, is_manual=False, user_id=None
 
         # 2. Apply ML models to the new reading
         from ml.apply_models_to_record import apply_models_to_record
-        is_anomaly, anomaly_score, predicted_load = apply_models_to_record(log.id)
+        is_anomaly, anomaly_score, predicted_current, predicted_voltage = apply_models_to_record(log.id)
 
         logger.info(f"Applied models to record {log.id}")
-        logger.info(f"Is anomaly: {is_anomaly}, Score: {anomaly_score}, Predicted next load: {predicted_load}")
+        logger.info(f"Is anomaly: {is_anomaly}, Score: {anomaly_score}")
+        logger.info(f"Predicted current: {predicted_current:.2f}A, Predicted voltage: {predicted_voltage:.2f}V")
 
         # 3. Determine the simulation message for the user
         match simulation_type:
@@ -203,10 +208,12 @@ if __name__ == "__main__":
         print(f"- Anomaly detected: {log.is_anomaly}")
         if log.is_anomaly and log.anomaly_reason:
             print(f"- Anomaly reason: {log.anomaly_reason}")
-        if log.predicted_load is not None:
-            print(f"- Predicted next load: {log.predicted_load:.2f}W")
+        if log.predicted_current is not None and log.predicted_voltage is not None:
+            print(f"- Predicted next current: {log.predicted_current:.2f}A")
+            print(f"- Predicted next voltage: {log.predicted_voltage:.2f}V")
+            print(f"- Is abnormal prediction: {log.is_abnormal_prediction}")
         else:
-            print("- Predicted next load: None")
+            print("- Predicted values: None")
         print(f"- Backup triggered: {log.backup_triggered}")
         if log.backup_triggered:
             backups = log.backups.all()

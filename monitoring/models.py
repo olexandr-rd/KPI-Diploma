@@ -1,4 +1,4 @@
-# monitoring/models.py - Updated SystemSettings model
+# monitoring/models.py
 from django.db import models
 from django.contrib.auth.models import User
 from django.utils import timezone
@@ -43,10 +43,6 @@ class SystemSettings(models.Model):
     # Data collection settings
     data_collection_interval = models.IntegerField(default=15, help_text="Інтервал збору даних (хвилин)")
 
-    # Energy system settings
-    min_load_threshold = models.FloatField(default=500, help_text="Мінімальне допустиме навантаження (Вт)")
-    max_load_threshold = models.FloatField(default=2000, help_text="Максимальне допустиме навантаження (Вт)")
-
     # Database settings
     max_energy_logs = models.IntegerField(default=5000,
                                           help_text="Максимальна кількість записів енергосистеми")
@@ -63,18 +59,27 @@ class SystemSettings(models.Model):
         verbose_name_plural = "Налаштування планувальника"
 
 
+def get_anomaly_score_explanation():
+    """Provides an explanation of the anomaly score scale"""
+    return "Оцінка аномалії від -1 до 1. Значення менше 0 вважаються аномаліями, де -1 - найбільш аномальне."
+
+
 class EnergyLog(models.Model):
     timestamp = models.DateTimeField(auto_now_add=True, verbose_name="Час запису")
 
-    # Simulated inverter metrics
+    # Energy system metrics
     ac_output_voltage = models.FloatField(verbose_name="Вихідна напруга (В)")
-    dc_battery_voltage = models.FloatField(verbose_name="Напруга батареї (В)")
-    dc_battery_current = models.FloatField(verbose_name="Струм батареї (А)")
-    load_power = models.FloatField(verbose_name="Навантаження (Вт)")
-    temperature = models.FloatField(null=True, blank=True, verbose_name="Температура (°C)")
+    dc_battery_voltage = models.FloatField(verbose_name="Напруга акамулятора (В)")
+    dc_battery_current = models.FloatField(verbose_name="Струм акамулятора (А)")
+    load_power = models.FloatField(verbose_name="Потужність (Вт)")
+    temperature = models.FloatField(null=True, blank=True, verbose_name="Температура акумулятора (°C)")
 
-    # ML outputs
-    predicted_load = models.FloatField(null=True, blank=True, verbose_name="Прогнозоване навантаження (Вт)")
+    # ML outputs - prediction
+    predicted_current = models.FloatField(null=True, blank=True, verbose_name="Прогнозований струм (А)")
+    predicted_voltage = models.FloatField(null=True, blank=True, verbose_name="Прогнозована напруга (В)")
+    is_abnormal_prediction = models.BooleanField(default=False, verbose_name="Аномальний прогноз")
+
+    # ML outputs - anomaly
     anomaly_score = models.FloatField(null=True, blank=True, verbose_name="Оцінка аномалії")
     is_anomaly = models.BooleanField(default=False, verbose_name="Аномалія")
     anomaly_reason = models.CharField(max_length=255, null=True, blank=True, verbose_name="Причина аномалії")
@@ -82,13 +87,13 @@ class EnergyLog(models.Model):
     # Backup system
     backup_triggered = models.BooleanField(default=False, verbose_name="Резервна копія")
 
-    # New fields
+    # User tracking
     is_manual = models.BooleanField(default=False, verbose_name="Ручний запис")
     created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True,
-                                   verbose_name="Створено користувачем")
+                                 verbose_name="Створено користувачем")
 
     def __str__(self):
-        return f"[{self.timestamp}] Навантаження: {self.load_power}Вт | Аномалія: {self.is_anomaly}"
+        return f"[{self.timestamp}] Потужність: {self.load_power}Вт | Аномалія: {self.is_anomaly}"
 
     def get_anomaly_description(self):
         """Return human-readable anomaly interpretation based on score"""
@@ -105,10 +110,6 @@ class EnergyLog(models.Model):
         else:
             return "Норма"
 
-    def get_anomaly_score_explanation(self):
-        """Provides an explanation of the anomaly score scale"""
-        return "Оцінка аномалії від -1 до 1. Значення менше -0.1 вважаються аномаліями, де -1 - найбільш аномальне."
-
     class Meta:
         indexes = [
             models.Index(fields=['-timestamp']),  # Index for faster ordering by timestamp desc
@@ -120,7 +121,7 @@ class EnergyLog(models.Model):
 class BackupLog(models.Model):
     TRIGGER_CHOICES = [
         ('ANOMALY', 'Аномалія'),
-        ('PREDICTION', 'Прогноз навантаження'),
+        ('PREDICTION', 'Аномальний прогноз'),
         ('MANUAL', 'Ручне копіювання'),
         ('SCHEDULED', 'За розкладом'),
         ('UNKNOWN', 'Невідома причина'),

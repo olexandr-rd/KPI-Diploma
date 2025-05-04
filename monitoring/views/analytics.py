@@ -1,4 +1,5 @@
 # monitoring/views/analytics.py
+import ast
 
 from django.shortcuts import render
 from django.contrib.auth.decorators import login_required
@@ -115,34 +116,11 @@ def load_trend_chart(request):
     avg_loads = [round(item['avg_load'], 2) if item['avg_load'] else 0 for item in load_data]
     max_loads = [round(item['max_load'], 2) if item['max_load'] else 0 for item in load_data]
 
-    # Get average prediction accuracy
-    prediction_data = EnergyLog.objects.filter(
-        timestamp__gte=start_date,
-        load_power__isnull=False,
-        predicted_load__isnull=False
-    ).annotate(
-        date=trunc_func('timestamp')
-    ).values('date').annotate(
-        avg_predicted=Avg('predicted_load')
-    ).order_by('date')
-
-    predicted_loads = []
-    for date in labels:
-        # Find matching date in prediction data
-        matching_prediction = next(
-            (item for item in prediction_data if item['date'].strftime(date_format) == date),
-            None
-        )
-        if matching_prediction and matching_prediction['avg_predicted']:
-            predicted_loads.append(round(matching_prediction['avg_predicted'], 2))
-        else:
-            predicted_loads.append(None)
-
     return JsonResponse({
         'labels': labels,
         'datasets': [
             {
-                'label': 'Середнє навантаження (Вт)',
+                'label': 'Середня потужність (Вт)',
                 'data': avg_loads,
                 'borderColor': 'rgba(75, 192, 192, 1)',
                 'backgroundColor': 'rgba(75, 192, 192, 0.2)',
@@ -150,20 +128,12 @@ def load_trend_chart(request):
                 'tension': 0.4,
             },
             {
-                'label': 'Максимальне навантаження (Вт)',
+                'label': 'Максимальна потужність (Вт)',
                 'data': max_loads,
                 'borderColor': 'rgba(255, 99, 132, 1)',
                 'backgroundColor': 'rgba(255, 99, 132, 0.2)',
                 'fill': False,
                 'tension': 0.4,
-            },
-            {
-                'label': 'Прогнозоване навантаження (Вт)',
-                'data': predicted_loads,
-                'borderColor': 'rgba(54, 162, 235, 1)',
-                'backgroundColor': 'rgba(54, 162, 235, 0.2)',
-                'borderDash': [5, 5],
-                'fill': False,
             }
         ]
     })
@@ -225,6 +195,62 @@ def anomalies_by_month_chart(request):
                 'order': 0
             }
         ]
+    })
+
+
+@login_required
+def anomaly_by_parameter_chart(request):
+    """Get anomaly counts by parameter and render as table"""
+    period = request.GET.get('period', 'month')
+
+    # Get date range
+    now = timezone.now()
+    if period == 'week':
+        start_date = now - timedelta(days=7)
+    elif period == 'year':
+        start_date = now - timedelta(days=365)
+    else:  # default to month
+        start_date = now - timedelta(days=30)
+
+    # Get anomalies with reasons
+    anomalies = EnergyLog.objects.filter(
+        timestamp__gte=start_date,
+        is_anomaly=True,
+        anomaly_reason__isnull=False
+    )
+
+    # Count anomalies by parameter
+    parameter_counts = {
+        'Вихідна напруга': 0,
+        'Напруга батареї': 0,
+        'Струм батареї': 0,
+        'Потужність': 0,
+        'Температура': 0
+    }
+
+    for anomaly in anomalies:
+        # Parse anomaly_reason which is stored as string representation of list
+        try:
+            if anomaly.anomaly_reason.startswith('['):
+                reasons = ast.literal_eval(anomaly.anomaly_reason)
+            else:
+                reasons = [anomaly.anomaly_reason]
+
+            for reason in reasons:
+                for param_name in parameter_counts.keys():
+                    if param_name in reason:
+                        parameter_counts[param_name] += 1
+        except:
+            pass
+
+    # Sort by count (descending) and get max count for progress bar scaling
+    sorted_parameters = dict(sorted(parameter_counts.items(), key=lambda x: x[1], reverse=True))
+    max_count = max(parameter_counts.values()) if parameter_counts.values() else 1
+
+    # Render the table template
+    return render(request, 'analytics/anomaly_parameter_table.html', {
+        'parameter_counts': sorted_parameters,
+        'max_count': max_count
     })
 
 
