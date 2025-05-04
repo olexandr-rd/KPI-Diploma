@@ -1,6 +1,4 @@
 # monitoring/models.py - Updated SystemSettings model
-from datetime import datetime
-
 from django.db import models
 from django.contrib.auth.models import User
 from django.utils import timezone
@@ -32,28 +30,22 @@ class UserProfile(models.Model):
 
 class SystemSettings(models.Model):
     # Backup settings
-    backup_frequency_hours = models.IntegerField(default=24,
-                                                 help_text="Частота створення резервних копій (годин)")
-    backup_retention_days = models.IntegerField(default=30,
-                                                help_text="Зберігати резервні копії (днів)")
-    max_backups = models.IntegerField(default=20,
-                                      help_text="Максимальна кількість резервних копій")
+    backup_frequency_hours = models.IntegerField(default=24, help_text="Частота створення резервних копій (годин)")
+    backup_retention_days = models.IntegerField(default=30, help_text="Зберігати резервні копії (днів)")
+    max_backups = models.IntegerField(default=20, help_text="Максимальна кількість резервних копій")
 
     # Maintenance settings
     maintenance_time = models.TimeField(
-        default=timezone.now().replace(hour=0, minute=0, second=0).time(),
-        help_text="Час виконання щоденного обслуговування (очищення даних)"
+        default=timezone.localtime(timezone.now()).replace(hour=0, minute=0, second=0).time(),
+        help_text="Час виконання перезапису бази даних"
     )
 
     # Data collection settings
-    data_collection_interval = models.IntegerField(default=15,
-                                                   help_text="Інтервал збору даних (хвилин)")
+    data_collection_interval = models.IntegerField(default=15, help_text="Інтервал збору даних (хвилин)")
 
     # Energy system settings
-    min_load_threshold = models.FloatField(default=500,
-                                           help_text="Мінімальне допустиме навантаження (Вт)")
-    max_load_threshold = models.FloatField(default=2000,
-                                           help_text="Максимальне допустиме навантаження (Вт)")
+    min_load_threshold = models.FloatField(default=500, help_text="Мінімальне допустиме навантаження (Вт)")
+    max_load_threshold = models.FloatField(default=2000, help_text="Максимальне допустиме навантаження (Вт)")
 
     # Database settings
     max_energy_logs = models.IntegerField(default=5000,
@@ -64,11 +56,11 @@ class SystemSettings(models.Model):
     modified_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
 
     def __str__(self):
-        return f"Налаштування системи (ост. зміна: {self.last_modified})"
+        return f"Налаштування планувальника (ост. зміна: {self.last_modified})"
 
     class Meta:
-        verbose_name = "Налаштування системи"
-        verbose_name_plural = "Налаштування системи"
+        verbose_name = "Налаштування планувальника"
+        verbose_name_plural = "Налаштування планувальника"
 
 
 class EnergyLog(models.Model):

@@ -152,18 +152,16 @@ def run_simulation_with_type(simulation_type=None, is_manual=False, user_id=None
         logger.info(f"Applied models to record {log.id}")
         logger.info(f"Is anomaly: {is_anomaly}, Score: {anomaly_score}, Predicted next load: {predicted_load}")
 
-        # 3. The system will automatically decide if a backup is needed based on the
-        # logic in the apply_models_to_record function.
+        # 3. Determine the simulation message for the user
+        match simulation_type:
+            case 'anomaly':
+                simulation_message = "Симуляція аномалії"
+            case 'abnormal_prediction':
+                simulation_message = "Симуляція аномального прогнозу"
+            case _:
+                simulation_message = "Симуляція звичайних даних"
 
-        # 4. Determine the simulation message for the user
-        if simulation_type == 'anomaly':
-            message = "Симуляція аномалії"
-        elif simulation_type == 'abnormal_prediction':
-            message = "Симуляція аномального прогнозу"
-        else:
-            message = "Симуляція звичайних даних"
-
-        return log.id, message
+        return log.id, simulation_message
 
     except Exception as e:
         logger.error(f"Error during simulation: {str(e)}")

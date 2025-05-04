@@ -228,6 +228,17 @@ def apply_models_to_record(record_id=None):
     record.predicted_load = predicted_next_load
     record.save()
 
+    # After applying models and saving the record, explicitly check if we need to create a backup
+    # This ensures that anomalies and abnormal predictions trigger backups as expected
+    if is_anomaly or is_prediction_abnormal:
+        try:
+            from ml.backup_database import check_and_backup_if_needed
+            backup_performed = check_and_backup_if_needed(record.id)
+            if backup_performed:
+                print(f"Backup created for record {record.id} due to {'anomaly' if is_anomaly else 'abnormal prediction'}")
+        except Exception as e:
+            print(f"Error triggering backup for record {record.id}: {e}")
+
     print(f"Applied models to record {record.id}")
     print(f"Is anomaly: {is_anomaly}, Score: {anomaly_score}, Predicted next load: {predicted_next_load}")
     if anomaly_reason:

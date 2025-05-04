@@ -86,12 +86,16 @@ def cleanup_old_backups():
         logger.info(f"Found {len(backup_files)} backup files")
 
         # Remove files older than retention_days
-        cutoff_date = datetime.now() - timedelta(days=retention_days)
+        cutoff_date = timezone.now() - timedelta(days=retention_days)
         old_files = []
 
         for file_path in backup_files:
             try:
                 file_mtime = datetime.fromtimestamp(file_path.stat().st_mtime)
+                # Make sure the timestamp is timezone-aware
+                if timezone.is_naive(file_mtime):
+                    file_mtime = timezone.make_aware(file_mtime)
+
                 if file_mtime < cutoff_date:
                     old_files.append(file_path)
             except Exception as e:
@@ -149,6 +153,66 @@ def create_scheduled_backup():
         return False
 
 
+def check_and_backup_if_needed(record_id):
+    """
+    Check if a record needs a backup and perform it if needed
+
+    Args:
+        record_id: ID of the record to check
+
+    Returns:
+        bool: True if backup was needed and performed, False otherwise
+    """
+    logger.info(f"Checking if record {record_id} needs backup")
+
+    # Load system settings
+    settings = load_system_settings()
+
+    try:
+        # Get the record
+        record = EnergyLog.objects.get(id=record_id)
+
+        # Check if record is already backed up
+        if record.backup_triggered:
+            logger.info(f"Record {record_id} is already backed up")
+            return False
+
+        # Check conditions for backup
+        is_anomalous = record.is_anomaly
+        predicted_load_abnormal = False
+
+        # Get current thresholds from settings
+        min_threshold = settings.min_load_threshold if settings else PREDICTED_LOAD_MIN
+        max_threshold = settings.max_load_threshold if settings else PREDICTED_LOAD_MAX
+
+        # Check the prediction
+        if record.predicted_load is not None:
+            if record.predicted_load < min_threshold or record.predicted_load > max_threshold:
+                predicted_load_abnormal = True
+                logger.info(
+                    f"Predicted load {record.predicted_load:.2f}W is outside normal range ({min_threshold}-{max_threshold}W)")
+
+        # Determine if backup is needed
+        need_backup = is_anomalous or predicted_load_abnormal
+
+        if need_backup:
+            # Determine reason
+            reason = "ANOMALY" if is_anomalous else "PREDICTION"
+
+            # Perform backup
+            logger.info(f"Backup needed for record {record_id}. Reason: {reason}")
+            backup_performed = backup_database(record_id=record_id, reason=reason)
+
+            return backup_performed
+        else:
+            logger.info(f"No backup needed for record {record_id}")
+            return False
+
+    except Exception as e:
+        logger.error(f"Error checking if backup needed for record {record_id}: {str(e)}")
+        return False
+
+
 def backup_database(record_id=None, force=False, reason=None, user=None):
     """
     Create a backup of the PostgreSQL database if:
@@ -182,8 +246,8 @@ def backup_database(record_id=None, force=False, reason=None, user=None):
         predicted_load_abnormal = False
 
         # Get current thresholds from settings
-        min_threshold = settings.min_load_threshold
-        max_threshold = settings.max_load_threshold
+        min_threshold = settings.min_load_threshold if settings else PREDICTED_LOAD_MIN
+        max_threshold = settings.max_load_threshold if settings else PREDICTED_LOAD_MAX
 
         # Check the prediction
         if record.predicted_load is not None:
@@ -226,7 +290,7 @@ def backup_database(record_id=None, force=False, reason=None, user=None):
     from django.conf import settings as django_settings
     db_settings = django_settings.DATABASES['default']
 
-    # Create backup filename with timestamp
+    # Create backup filename with timezone-aware timestamp
     timestamp = timezone.now().strftime('%Y%m%d_%H%M%S')
     backup_file = os.path.join(backups_dir, f"energy_data_{timestamp}.sql")
     backup_filename = os.path.basename(backup_file)
@@ -367,15 +431,12 @@ def backup_database(record_id=None, force=False, reason=None, user=None):
         return False
 
 
-# ml/backup_database.py (restore_database function)
-
-def restore_database(backup_filename, user=None):
+def restore_database(backup_filename):
     """
-    Restore only the energy logs from a backup file
+    Restore only the energy logs from a backup file - properly overwriting existing data
 
     Args:
         backup_filename: Name of the backup file
-        user: User who initiated the restore
 
     Returns:
         tuple: (success, message)
@@ -409,35 +470,31 @@ def restore_database(backup_filename, user=None):
             # Extract only the energy logs table data and schema
             # Define patterns to match the energy logs table SQL statements
             table_pattern = r'CREATE TABLE public\.monitoring_energylog[\s\S]*?;\s*\n'
-            sequence_pattern = r'CREATE SEQUENCE public\.monitoring_energylog_id_seq[\s\S]*?;\s*\n'
             data_pattern = r'COPY public\.monitoring_energylog[\s\S]*?\\.\s*\n'
-            index_pattern = r'CREATE INDEX[\s\S]*?monitoring_energylog[\s\S]*?;\s*\n'
 
             # Find all relevant sections
             table_match = re.search(table_pattern, content)
-            sequence_match = re.search(sequence_pattern, content)
             data_match = re.search(data_pattern, content)
-            index_matches = re.finditer(index_pattern, content)
 
-            # Start with statements to drop existing table
+            # Start with statements to handle foreign keys and clear existing table
             temp_file.write('-- Generated restore script for monitoring_energylog\n')
             temp_file.write('BEGIN;\n')
-            temp_file.write('DROP TABLE IF EXISTS public.monitoring_energylog CASCADE;\n')
 
-            # Write the relevant sections to the temp file
-            if sequence_match:
-                temp_file.write(sequence_match.group(0))
+            # Delete all existing records from EnergyLog (keeping table structure)
+            temp_file.write('DELETE FROM public.monitoring_energylog;\n')
 
-            if table_match:
-                temp_file.write(table_match.group(0))
-
-            # Write any relevant indexes
-            for match in index_matches:
-                temp_file.write(match.group(0))
-
-            # Write the data
+            # Insert the data
             if data_match:
                 temp_file.write(data_match.group(0))
+            else:
+                raise Exception("No data found in backup file")
+
+            # Set the sequence to max ID + 1 (since we don't have sequence info in backup)
+            temp_file.write("\n-- Reset sequence\n")
+            temp_file.write(
+                "SELECT setval('public.monitoring_energylog_id_seq', "
+                "(SELECT COALESCE(MAX(id), 0) + 1 FROM public.monitoring_energylog));\n"
+            )
 
             temp_file.write('COMMIT;\n')
 
@@ -471,18 +528,34 @@ def restore_database(backup_filename, user=None):
             logger.error(error_msg)
             return False, error_msg
 
-        # Log the restoration
-        restoration_log = BackupLog.objects.create(
-            backup_file=f"restored_from_{backup_filename}",
-            status="SUCCESS",
-            size_kb=0,  # No actual file created
-            trigger_reason="MANUAL",
-            error_message=None,
-            created_by=user
+        # Verify the restore
+        count_cmd = [
+            'psql',
+            '-h', db_settings['HOST'],
+            '-p', db_settings['PORT'],
+            '-U', db_settings['USER'],
+            '-d', db_settings['NAME'],
+            '-t',  # Tuple only output
+            '-c', 'SELECT COUNT(*) FROM public.monitoring_energylog;'
+        ]
+
+        count_process = subprocess.Popen(
+            count_cmd,
+            env=dict(os.environ, PGPASSWORD=db_settings['PASSWORD']),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE
         )
+        count_stdout, count_stderr = count_process.communicate()
+
+        if count_process.returncode == 0:
+            record_count = count_stdout.decode('utf-8').strip()
+            logger.info(f"Restored {record_count} records to monitoring_energylog")
+            success_message = f"Energy logs successfully restored from {backup_filename} ({record_count} records)"
+        else:
+            success_message = f"Energy logs successfully restored from {backup_filename}"
 
         logger.info("Energy logs restored successfully")
-        return True, "Energy logs restored successfully"
+        return True, success_message
 
     except Exception as e:
         error_msg = f"Exception during database restore: {str(e)}"

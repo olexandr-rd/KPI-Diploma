@@ -45,17 +45,20 @@ def get_stats():
     next_data_collection = now + timedelta(minutes=minutes_to_add)
     next_data_collection = next_data_collection.replace(second=0, microsecond=0)
 
-    # Next maintenance at specified time
+    # Next maintenance at specified time - Convert to local timezone for display
     maintenance_time = settings.maintenance_time if hasattr(settings, 'maintenance_time') else now.replace(hour=0,
                                                                                                            minute=0,
                                                                                                            second=0,
                                                                                                            microsecond=0).time()
 
-    # Create a timezone-aware datetime for today at the maintenance time
-    next_maintenance = timezone.make_aware(datetime.combine(now.date(), maintenance_time))
+    # Create a timezone-aware datetime for today at the maintenance time in user's timezone
+    local_now = timezone.localtime(now)
+    next_maintenance = timezone.localtime(
+        timezone.make_aware(datetime.combine(local_now.date(), maintenance_time))
+    )
 
     # If that time is already past today, schedule for tomorrow
-    if next_maintenance < now:
+    if next_maintenance < local_now:
         next_maintenance += timedelta(days=1)
 
     # Next scheduled backup
@@ -63,10 +66,9 @@ def get_stats():
     if backup_hours <= 0:
         backup_hours = 24  # Default to daily
 
-    # Calculate next aligned backup time
-    backup_minutes_interval = backup_hours * 60
-    backup_minutes_since_midnight = (now - now.replace(hour=0, minute=0, second=0, microsecond=0)).total_seconds() / 60
-    next_backup_interval = ((backup_minutes_since_midnight // backup_minutes_interval) + 1) * backup_minutes_interval
+    backup_interval_minutes = backup_hours * 60
+    backup_minutes_since_midnight = (local_now - local_now.replace(hour=0, minute=0, second=0, microsecond=0)).total_seconds() / 60
+    next_backup_interval = ((backup_minutes_since_midnight // backup_interval_minutes) + 1) * backup_interval_minutes
     backup_minutes_to_add = next_backup_interval - backup_minutes_since_midnight
 
     # Find the last backup first
@@ -80,19 +82,24 @@ def get_stats():
         hours_since_last = (now - last_backup.timestamp).total_seconds() / 3600
         hours_until_next = backup_hours - (hours_since_last % backup_hours)
         next_backup = now + timedelta(hours=hours_until_next)
-        # Align to the calculated time
-        backup_time = now.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(minutes=next_backup_interval)
-        next_backup = backup_time if backup_time > now else backup_time + timedelta(days=1)
+        # Align to the calculated time in local timezone
+        local_next_backup = timezone.localtime(next_backup)
+        backup_time = local_next_backup.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(minutes=next_backup_interval)
+        next_backup = backup_time if backup_time > local_next_backup else backup_time + timedelta(days=1)
     else:
-        # If no previous scheduled backup, use aligned time
-        next_backup = now.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(minutes=next_backup_interval)
-        if next_backup < now:
+        # If no previous scheduled backup, use aligned time in local timezone
+        local_now = timezone.localtime(now)
+        next_backup = local_now.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(minutes=next_backup_interval)
+        if next_backup < local_now:
             next_backup += timedelta(days=1)
+
+    # Convert next_data_collection to local timezone for display
+    next_data_collection = timezone.localtime(next_data_collection)
 
     # Check if scheduler is running
     scheduler_active = False
     scheduler_status = "Неактивний"
-    last_scheduler_check = now  # Always set the check time to now
+    last_scheduler_check = timezone.localtime(now)  # Display in local timezone
 
     try:
         for proc in psutil.process_iter(['pid', 'name', 'cmdline']):

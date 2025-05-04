@@ -1,4 +1,4 @@
-# ml/scheduled_tasks.py
+# ml/scheduled_tasks.py - Updated version to fix race condition
 
 import os
 import django
@@ -8,6 +8,7 @@ import schedule
 import sys
 import functools
 from pathlib import Path
+from datetime import datetime, timedelta
 from django.utils import timezone
 
 # Get the absolute path to the project directory
@@ -50,13 +51,6 @@ active_jobs = {
     'data_simulation': None,
     'backup': None,
     'maintenance': None
-}
-
-# Global job queue with priorities
-job_priorities = {
-    'run_data_simulation': 1,  # Highest priority
-    'run_scheduled_backup': 2,
-    'run_maintenance': 3  # Lowest priority
 }
 
 # Track if a job is currently running
@@ -120,36 +114,42 @@ def run_data_simulation():
     try:
         # Import functions from simulate_data instead of reimplementing
         from ml.simulate_data import run_simulation_with_type
-        
+
         # Run the simulation with proper error handling
         log_id, simulation_message = run_simulation_with_type(
             simulation_type=None,  # Normal simulation
-            is_manual=False,       # Automated by scheduler
-            user_id=None           # No user for automated tasks
+            is_manual=False,  # Automated by scheduler
+            user_id=None  # No user for automated tasks
         )
-        
+
         if log_id:
             logger.info(f"Data simulation completed successfully. Log ID: {log_id}, {simulation_message}")
+
+            # After simulation, check if we need to create a backup
+            # This additional check helps ensure that backups are triggered when needed
+            from ml.backup_database import check_and_backup_if_needed
+            check_and_backup_if_needed(log_id)
         else:
             logger.error("Data simulation failed - no log ID returned")
-            
+
     except django.db.utils.InterfaceError as e:
         # Handle the specific connection closed error
         logger.error(f"Database connection error during data simulation: {str(e)}")
-        
+
         # Force close the connection to ensure it's re-established on next use
         from django.db import connection
         connection.close()
-        
+
         # Could attempt a retry here if needed
         logger.info("Closed broken database connection. Next run will establish a fresh connection.")
-        
+
     except Exception as e:
         logger.error(f"Exception during data simulation: {str(e)}")
         import traceback
         logger.error(traceback.format_exc())
 
 
+@prioritized_job_wrapper
 def run_scheduled_backup():
     """Run daily scheduled backup"""
     logger.info("Running scheduled backup")
@@ -250,6 +250,7 @@ def rotate_logs():
         logger.error(f"Error during log rotation: {e}")
 
 
+@prioritized_job_wrapper
 def run_maintenance():
     """Run all maintenance tasks"""
     logger.info("Running maintenance tasks")
@@ -262,12 +263,6 @@ def run_maintenance():
     purge_old_energy_logs()
 
     logger.info("Maintenance tasks completed")
-
-
-# Apply the wrapper to the job functions
-run_data_simulation = prioritized_job_wrapper(run_data_simulation)
-run_scheduled_backup = prioritized_job_wrapper(run_scheduled_backup)
-run_maintenance = prioritized_job_wrapper(run_maintenance)
 
 
 def get_aligned_schedule_times(interval_minutes):
@@ -355,23 +350,25 @@ def update_schedule():
     logger.info(f"Next backup at: {next_backup_time}")
 
     # ===== MAINTENANCE SCHEDULING =====
-    maintenance_time = "00:00"  # Default
     try:
         # Get the maintenance time from settings
         if hasattr(settings, 'maintenance_time') and settings.maintenance_time:
-            # Get time in the correct timezone
-            local_time = timezone.localtime(timezone.now())
-            settings_time = settings.maintenance_time
-
-            # Format as "HH:MM" in correct timezone
-            maintenance_time = f"{settings_time.hour:02d}:{settings_time.minute:02d}"
-
+            # Convert from settings time field to string
+            maintenance_time = settings.maintenance_time.strftime("%H:%M")
             logger.info(f"Using maintenance time from settings: {maintenance_time}")
-    except Exception as e:
-        logger.error(f"Error getting maintenance time: {e}")
+        else:
+            maintenance_time = "00:00"  # Default
+            logger.info(f"Using default maintenance time: {maintenance_time}")
 
-    logger.info(f"Scheduling daily maintenance at {maintenance_time}")
-    active_jobs['maintenance'] = schedule.every().day.at(maintenance_time).do(run_maintenance)
+        # Explicitly schedule maintenance at the specified time
+        logger.info(f"Scheduling daily maintenance at {maintenance_time}")
+        active_jobs['maintenance'] = schedule.every().day.at(maintenance_time).do(run_maintenance)
+    except Exception as e:
+        logger.error(f"Error scheduling maintenance: {e}")
+        # Fallback to default time
+        maintenance_time = "00:00"
+        logger.info(f"Fallback: Scheduling daily maintenance at {maintenance_time}")
+        active_jobs['maintenance'] = schedule.every().day.at(maintenance_time).do(run_maintenance)
 
     # Log schedule
     log_schedule()
@@ -409,7 +406,7 @@ def log_schedule():
 
 
 def run_pending_jobs():
-    """Run pending jobs with priority handling"""
+    """Run pending jobs without priority - run all that are due"""
     global job_running
 
     # If a job is already running, don't start another
@@ -422,28 +419,17 @@ def run_pending_jobs():
 
     for job in schedule.jobs:
         if job.should_run:
-            # Add to pending list with priority
-            priority = job_priorities.get(job.job_func.__name__, 99)  # Default to low priority
-            pending_jobs.append((priority, job))
+            pending_jobs.append(job)
 
     # No jobs to run
     if not pending_jobs:
         return
 
-    # Sort by priority (lower number = higher priority)
-    pending_jobs.sort(key=lambda x: x[0])
-
-    # Run only the highest priority job
-    _, job_to_run = pending_jobs[0]
-
-    # Run the job
-    logger.info(
-        f"Running job {job_to_run.job_func.__name__} (priority {job_priorities.get(job_to_run.job_func.__name__, 99)})")
-    job_to_run.run()
-
-    # Update the job's next run time
-    schedule.jobs = [job for job in schedule.jobs if job != job_to_run]
-    schedule.jobs.append(job_to_run)
+    # Run all jobs that are due
+    for job_to_run in pending_jobs:
+        logger.info(f"Running job {job_to_run.job_func.__name__}")
+        job_to_run.run()
+        time.sleep(1)
 
 
 def start_scheduler():

@@ -108,14 +108,10 @@ def force_backup(request):
         return redirect('backups_list')
 
     try:
-        # Get the latest record
-        latest_record = EnergyLog.objects.latest('timestamp')
-
-        # Import backup function directly
         from ml.backup_database import backup_database
 
-        # Force backup of the latest record with the current user
-        backup_performed = backup_database(latest_record.id, force=True, user=request.user)
+        # Force backup with the current user
+        backup_performed = backup_database(force=True, user=request.user)
 
         if backup_performed:
             messages.success(request, "Резервну копію створено успішно")
@@ -179,7 +175,7 @@ def restore_backup(request, backup_id):
         from ml.backup_database import restore_database
 
         # Perform restore
-        success, message = restore_database(backup.backup_file, user=request.user)
+        success, message = restore_database(backup.backup_file)
 
         if success:
             messages.success(request, f"Дані енергосистеми успішно відновлено з резервної копії {backup.backup_file}")
