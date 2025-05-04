@@ -39,7 +39,7 @@ def get_anomaly_explanation(features, feature_scores):
         'dc_battery_voltage': 'Напруга акамулятора',
         'dc_battery_current': 'Струм акамулятора',
         'load_power': 'Потужність',
-        'temperature': 'Температура'
+        'temperature': 'Температура акамулятора'
     }
 
     # Get an explanation for a random feature if there is more than 1

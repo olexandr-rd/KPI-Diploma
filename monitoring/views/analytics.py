@@ -222,10 +222,10 @@ def anomaly_by_parameter_chart(request):
     # Count anomalies by parameter
     parameter_counts = {
         'Вихідна напруга': 0,
-        'Напруга батареї': 0,
-        'Струм батареї': 0,
+        'Напруга акамулятора': 0,
+        'Струм акамулятора': 0,
         'Потужність': 0,
-        'Температура': 0
+        'Температура акамулятора': 0
     }
 
     for anomaly in anomalies:
@@ -251,6 +251,86 @@ def anomaly_by_parameter_chart(request):
     return render(request, 'analytics/anomaly_parameter_table.html', {
         'parameter_counts': sorted_parameters,
         'max_count': max_count
+    })
+
+
+@login_required
+def anomalies_trend_chart(request):
+    """AJAX endpoint for anomalies trend chart data - responsive to period"""
+    # Get time period from query params, default to month
+    period = request.GET.get('period', 'month')
+
+    # Determine start date and truncation function based on period
+    now = timezone.now()
+    if period == 'week':
+        start_date = now - timedelta(days=7)
+        trunc_func = TruncDay
+        date_format = '%d %b'
+    elif period == 'year':
+        start_date = now - timedelta(days=365)
+        trunc_func = TruncMonth
+        date_format = '%b %Y'
+    else:  # default to month
+        start_date = now - timedelta(days=30)
+        trunc_func = TruncDay
+        date_format = '%d %b'
+
+    # Query for anomaly counts by day/week/month
+    anomaly_data = EnergyLog.objects.filter(
+        timestamp__gte=start_date
+    ).annotate(
+        date=trunc_func('timestamp')
+    ).values('date').annotate(
+        total_logs=Count('id'),
+        anomaly_count=Count('id', filter=Q(is_anomaly=True))
+    ).order_by('date')
+
+    # Format data for chart
+    labels = [item['date'].strftime(date_format) for item in anomaly_data]
+    anomaly_counts = [item['anomaly_count'] for item in anomaly_data]
+    total_counts = [item['total_logs'] for item in anomaly_data]
+
+    # Calculate anomaly rates
+    anomaly_rates = [
+        round((item['anomaly_count'] / item['total_logs']) * 100, 1)
+        if item['total_logs'] > 0 else 0
+        for item in anomaly_data
+    ]
+
+    return JsonResponse({
+        'labels': labels,
+        'datasets': [
+            {
+                'type': 'line',
+                'label': 'Всього записів',
+                'data': total_counts,
+                'borderColor': 'rgba(54, 162, 235, 1)',  # Blue
+                'backgroundColor': 'rgba(54, 162, 235, 0.2)',
+                'fill': True,
+                'tension': 0.4,
+                'yAxisID': 'y',
+            },
+            {
+                'type': 'line',
+                'label': 'Аномалії',
+                'data': anomaly_counts,
+                'borderColor': 'rgba(255, 99, 132, 1)',  # Red
+                'backgroundColor': 'rgba(255, 99, 132, 0.2)',
+                'fill': True,
+                'tension': 0.4,
+                'yAxisID': 'y',
+            },
+            {
+                'type': 'line',
+                'label': 'Відсоток аномалій (%)',
+                'data': anomaly_rates,
+                'borderColor': 'rgba(255, 159, 64, 1)',  # Orange
+                'backgroundColor': 'transparent',
+                'fill': False,
+                'tension': 0.4,
+                'yAxisID': 'y1',
+            }
+        ]
     })
 
 

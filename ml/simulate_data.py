@@ -59,10 +59,7 @@ def create_energy_reading(simulation_type=None, is_manual=False, user=None):
             np.random.normal(30, 2)  # High battery
         ])
         dc_battery_current = np.random.normal(10, 8)  # Unstable current
-        load_power = np.random.choice([
-            np.random.normal(3500, 300),  # Overload
-            np.random.normal(10, 5)  # Almost no load
-        ])
+        load_power = np.random.normal(1250, 150)  # Normal power range
         temperature = np.random.normal(55, 5)  # High battery temperature
     elif simulation_type == 'abnormal_prediction':
 

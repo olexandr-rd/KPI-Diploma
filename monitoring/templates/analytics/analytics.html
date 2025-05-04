@@ -1,4 +1,4 @@
-<!-- monitoring/templates/analytics/analytics.html - Updated version -->
+<!-- monitoring/templates/analytics/analytics.html - Updated version with proper chart options -->
 {% extends 'base.html' %}
 {% load template_filters %}
 
@@ -96,9 +96,10 @@
         </div>
     </div>
 
-    <!-- Load Trend Chart -->
+    <!-- Two Charts Side by Side -->
     <div class="row mb-4">
-        <div class="col-12">
+        <!-- Load Trend Chart -->
+        <div class="col-md-6">
             <div class="card shadow-sm">
                 <div class="card-header bg-white py-3">
                     <h5 class="mb-0">Тренди потужності</h5>
@@ -108,32 +109,33 @@
                 </div>
             </div>
         </div>
-    </div>
 
-    <!-- Anomalies & Backups -->
-    <div class="row mb-4">
+        <!-- Anomalies Trend Chart -->
         <div class="col-md-6">
-            <div class="card shadow-sm h-100">
+            <div class="card shadow-sm">
                 <div class="card-header bg-white py-3">
-                    <h5 class="mb-0">Статистика аномалії</h5>
+                    <h5 class="mb-0">Аномалії за {{ period_display }}</h5>
                 </div>
                 <div class="card-body">
-                    <canvas id="anomaliesChart" height="250"></canvas>
-                </div>
-            </div>
-        </div>
-
-        <div class="col-md-6">
-            <div class="card shadow-sm h-100">
-                <div class="card-header bg-white py-3">
-                    <h5 class="mb-0">Резервні копії за видом</h5>
-                </div>
-                <div class="card-body">
-                    <canvas id="backupsChart" height="250"></canvas>
+                    <canvas id="anomaliesChart" height="150"></canvas>
                 </div>
             </div>
         </div>
     </div>
+
+    <!-- Backups -->
+{#    <div class="row mb-4">#}
+{#        <div class="col-12">#}
+{#            <div class="card shadow-sm h-100">#}
+{#                <div class="card-header bg-white py-3">#}
+{#                    <h5 class="mb-0">Резервні копії за видом</h5>#}
+{#                </div>#}
+{#                <div class="card-body">#}
+{#                    <canvas id="backupsChart" height="250"></canvas>#}
+{#                </div>#}
+{#            </div>#}
+{#        </div>#}
+{#    </div>#}
 
     <!-- Parameter Anomalies Table -->
     <div class="row">
@@ -211,14 +213,10 @@
                     data: data,
                     options: {
                         responsive: true,
-                        interaction: {
-                            mode: 'index',
-                            intersect: false,
-                        },
                         plugins: {
                             title: {
                                 display: true,
-                                text: 'Тренди потужності системи'
+                                text: 'Тенденції потужності системи'
                             },
                             tooltip: {
                                 enabled: true
@@ -244,24 +242,21 @@
             })
             .catch(error => console.error('Error loading trend chart:', error));
 
-        // Anomalies Chart
-        fetch('{% url "anomalies_by_month_chart" %}')
+        // Anomalies Chart - Now showing total vs anomalies comparison
+        fetch(`{% url "anomalies_trend_chart" %}?period={{ period }}`)
             .then(response => response.json())
             .then(data => {
                 const ctx = document.getElementById('anomaliesChart').getContext('2d');
                 new Chart(ctx, {
-                    type: 'bar',
+                    type: 'line',
                     data: data,
                     options: {
                         responsive: true,
                         plugins: {
                             title: {
                                 display: true,
-                                text: 'Аномалії'
-                            },
-                            legend: {
-                                position: 'top',
-                            },
+                                text: 'Аномалії порівняно із загальною кількістю'
+                            }
                         },
                         scales: {
                             y: {
@@ -269,25 +264,30 @@
                                 title: {
                                     display: true,
                                     text: 'Кількість'
-                                }
+                                },
+                                position: 'left',
                             },
                             y1: {
-                                position: 'right',
                                 beginAtZero: true,
                                 title: {
                                     display: true,
                                     text: 'Відсоток (%)'
                                 },
+                                position: 'right',
                                 max: 100,
                                 grid: {
                                     drawOnChartArea: false,
                                 }
                             }
+                        },
+                        interaction: {
+                            mode: 'index',
+                            intersect: false,
                         }
                     }
                 });
             })
-            .catch(error => console.error('Error loading anomalies chart:', error));
+            .catch(error => console.error('Error loading anomalies trend chart:', error));
 
         // Backups Chart
         fetch(`{% url 'backups_by_reason_chart' %}?period={{ period }}`)
