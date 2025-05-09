@@ -37,7 +37,7 @@ class SystemSettings(models.Model):
     # Maintenance settings
     maintenance_time = models.TimeField(
         default=timezone.localtime(timezone.now()).replace(hour=0, minute=0, second=0).time(),
-        help_text="Час виконання перезапису бази даних"
+        help_text="Розклад роботи з підтримки бази даних"
     )
 
     # Data collection settings
@@ -71,7 +71,7 @@ class EnergyLog(models.Model):
     ac_output_voltage = models.FloatField(verbose_name="Вихідна напруга (В)")
     dc_battery_voltage = models.FloatField(verbose_name="Напруга акамулятора (В)")
     dc_battery_current = models.FloatField(verbose_name="Струм акамулятора (А)")
-    load_power = models.FloatField(verbose_name="Потужність (Вт)")
+    load_power = models.FloatField(verbose_name="Навантаження (Вт)")
     temperature = models.FloatField(null=True, blank=True, verbose_name="Температура акумулятора (°C)")
 
     # ML outputs - prediction
@@ -93,7 +93,7 @@ class EnergyLog(models.Model):
                                  verbose_name="Створено користувачем")
 
     def __str__(self):
-        return f"[{self.timestamp}] Потужність: {self.load_power}Вт | Аномалія: {self.is_anomaly}"
+        return f"[{self.timestamp}] Навантаження: {self.load_power}Вт | Аномалія: {self.is_anomaly}"
 
     def get_anomaly_description(self):
         """Return human-readable anomaly interpretation based on score"""

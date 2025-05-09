@@ -35,11 +35,11 @@ def get_anomaly_explanation(features, feature_scores):
 
     # Map feature names to Ukrainian names
     feature_name_map = {
-        'ac_output_voltage': 'Вихідна напруга',
-        'dc_battery_voltage': 'Напруга акамулятора',
-        'dc_battery_current': 'Струм акамулятора',
-        'load_power': 'Потужність',
-        'temperature': 'Температура акамулятора'
+        'ac_output_voltage': 'Змінна напруга',
+        'dc_battery_voltage': 'Постійна напруга',
+        'dc_battery_current': 'Постійний струм',
+        'load_power': 'Навантаження',
+        'temperature': 'Температура'
     }
 
     # Get an explanation for a random feature if there is more than 1

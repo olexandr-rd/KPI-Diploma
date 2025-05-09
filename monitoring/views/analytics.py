@@ -120,7 +120,7 @@ def load_trend_chart(request):
         'labels': labels,
         'datasets': [
             {
-                'label': 'Середня потужність (Вт)',
+                'label': 'Середнє навантаження (Вт)',
                 'data': avg_loads,
                 'borderColor': 'rgba(75, 192, 192, 1)',
                 'backgroundColor': 'rgba(75, 192, 192, 0.2)',
@@ -128,71 +128,12 @@ def load_trend_chart(request):
                 'tension': 0.4,
             },
             {
-                'label': 'Максимальна потужність (Вт)',
+                'label': 'Максимальне навантаження (Вт)',
                 'data': max_loads,
                 'borderColor': 'rgba(255, 99, 132, 1)',
                 'backgroundColor': 'rgba(255, 99, 132, 0.2)',
                 'fill': False,
                 'tension': 0.4,
-            }
-        ]
-    })
-
-
-@login_required
-def anomalies_by_month_chart(request):
-    """AJAX endpoint for anomalies by month chart data"""
-    # Get last 12 months of data
-    end_date = timezone.now()
-    start_date = end_date - timedelta(days=365)
-
-    # Get anomaly counts by month
-    anomaly_data = EnergyLog.objects.filter(
-        timestamp__gte=start_date
-    ).annotate(
-        month=TruncMonth('timestamp')
-    ).values('month').annotate(
-        total_logs=Count('id'),
-        anomaly_count=Count('id', filter=Q(is_anomaly=True))
-    ).order_by('month')
-
-    # Format data for chart
-    labels = [item['month'].strftime('%b %Y') for item in anomaly_data]
-    anomaly_counts = [item['anomaly_count'] for item in anomaly_data]
-    total_counts = [item['total_logs'] for item in anomaly_data]
-
-    # Calculate anomaly rates
-    anomaly_rates = [
-        round((item['anomaly_count'] / item['total_logs']) * 100, 1)
-        if item['total_logs'] > 0 else 0
-        for item in anomaly_data
-    ]
-
-    return JsonResponse({
-        'labels': labels,
-        'datasets': [
-            {
-                'type': 'bar',
-                'label': 'Всього записів',
-                'data': total_counts,
-                'backgroundColor': 'rgba(54, 162, 235, 0.5)',
-                'order': 2
-            },
-            {
-                'type': 'bar',
-                'label': 'Кількість аномалій',
-                'data': anomaly_counts,
-                'backgroundColor': 'rgba(255, 99, 132, 0.5)',
-                'order': 1
-            },
-            {
-                'type': 'line',
-                'label': 'Відсоток аномалій (%)',
-                'data': anomaly_rates,
-                'borderColor': 'rgba(255, 159, 64, 1)',
-                'backgroundColor': 'rgba(255, 159, 64, 0.2)',
-                'yAxisID': 'y1',
-                'order': 0
             }
         ]
     })
@@ -221,11 +162,11 @@ def anomaly_by_parameter_chart(request):
 
     # Count anomalies by parameter
     parameter_counts = {
-        'Вихідна напруга': 0,
-        'Напруга акамулятора': 0,
-        'Струм акамулятора': 0,
-        'Потужність': 0,
-        'Температура акамулятора': 0
+        'Змінна напруга': 0,
+        'Постійна напруга': 0,
+        'Постійний струм': 0,
+        'Навантаження': 0,
+        'Температура': 0
     }
 
     for anomaly in anomalies:

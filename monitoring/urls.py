@@ -53,8 +53,7 @@ urlpatterns = [
 
     # HTMX chart endpoints for analytics
     path('charts/load-trend/', views.load_trend_chart, name='load_trend_chart'),
-    path('charts/anomalies-by-month/', views.anomalies_by_month_chart, name='anomalies_by_month_chart'),
-    path('charts/anomalies-trend/', views.anomalies_trend_chart, name='anomalies_trend_chart'),  # NEW
+    path('charts/anomalies-trend/', views.anomalies_trend_chart, name='anomalies_trend_chart'),
     path('charts/backups-by-reason/', views.backups_by_reason_chart, name='backups_by_reason_chart'),
     path('charts/anomaly-by-parameter/', views.anomaly_by_parameter_chart, name='anomaly_by_parameter_chart'),
 ]

@@ -16,7 +16,7 @@
     <div class="alert alert-warning">
         <i class="bi bi-exclamation-triangle-fill me-2"></i> <strong>Увага!</strong> Планувальник не запущено.
         Автоматичний збір даних та резервне копіювання недоступні.
-        {% if user.profile.is_manager %}
+        {% if user.profile.is_admin %}
             <a href="{% url 'system_settings' %}" class="btn btn-sm btn-warning ms-3">Керувати планувальником</a>
         {% endif %}
     </div>
@@ -50,7 +50,7 @@
         <div class="col-lg-4">
             <div class="card shadow-sm h-100">
                 <div class="card-header bg-white d-flex justify-content-between align-items-center py-3">
-                    <h5 class="mb-0">Нещодавні аномалії</h5>
+                    <h5 class="mb-0">Поточні аномалії</h5>
                     <a href="{% url 'logs_list' %}?anomaly=yes" class="btn btn-sm btn-outline-danger">
                         <i class="bi bi-exclamation-triangle"></i> Усі аномалії
                     </a>
@@ -116,13 +116,13 @@
         <div class="col-12">
             <div class="card shadow-sm">
                 <div class="card-header bg-white d-flex justify-content-between align-items-center py-3">
-                    <h5 class="mb-0">Тенденції навантаження</h5>
+                    <h5 class="mb-0">Тренди навантаження</h5>
                     <a href="{% url 'analytics' %}" class="btn btn-sm btn-outline-primary">
                         <i class="bi bi-graph-up"></i> Детальна аналітика
                     </a>
                 </div>
                 <div class="card-body">
-                    <canvas id="loadTrendChart" height="200"></canvas>
+                    <canvas id="loadTrendChart" height="100"></canvas>
                 </div>
             </div>
         </div>
@@ -170,7 +170,7 @@
                         plugins: {
                             title: {
                                 display: true,
-                                text: 'Тенденції навантаження за останній тиждень'
+                                text: 'Тренди навантаження за останній тиждень'
                             },
                             legend: {
                                 position: 'top',

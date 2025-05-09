@@ -44,7 +44,7 @@ class Migration(migrations.Migration):
         migrations.AlterField(
             model_name='energylog',
             name='load_power',
-            field=models.FloatField(verbose_name='Потужність (Вт)'),
+            field=models.FloatField(verbose_name='Навантаження (Вт)'),
         ),
         migrations.AlterField(
             model_name='energylog',

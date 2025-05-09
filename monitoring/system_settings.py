@@ -215,7 +215,7 @@ def restart_scheduler(request):
 
 
 @login_required
-@manager_required(message="У вас немає прав для перезапису бази даних.")
+@manager_required(message="У вас немає прав для запуску підтримки бази даних.")
 def run_maintenance(request):
     """Run maintenance tasks manually"""
     if request.method != 'POST':
@@ -234,11 +234,11 @@ def run_maintenance(request):
         )
 
         if result.returncode == 0:
-            messages.success(request, "Перезапис бази даних виконано успішно.")
+            messages.success(request, "Роботу з підтримки бази даних виконано успішно.")
         else:
-            messages.error(request, f"Помилка перезапису бази даних: {result.stderr}")
+            messages.error(request, f"Помилка роботи з підтримки бази даних: {result.stderr}")
 
     except Exception as e:
-        messages.error(request, f"Помилка запуску перезапису бази даних: {str(e)}")
+        messages.error(request, f"Помилка запуску роботи з підтримки бази даних: {str(e)}")
 
     return redirect('system_settings')
