@@ -59,13 +59,8 @@ class SystemSettings(models.Model):
         verbose_name_plural = "Налаштування планувальника"
 
 
-def get_anomaly_score_explanation():
-    """Provides an explanation of the anomaly score scale"""
-    return "Оцінка аномалії від -1 до 1. Значення менше 0 вважаються аномаліями, де -1 - найбільш аномальне."
-
-
 class EnergyLog(models.Model):
-    timestamp = models.DateTimeField(auto_now_add=True, verbose_name="Час запису")
+    timestamp = models.DateTimeField(auto_now_add=False, verbose_name="Час запису")
 
     # Energy system metrics
     ac_output_voltage = models.FloatField(verbose_name="Вихідна напруга (В)")
@@ -132,7 +127,7 @@ class BackupLog(models.Model):
         ('FAILED', 'Помилка'),
     ]
 
-    timestamp = models.DateTimeField(auto_now_add=True, verbose_name="Час створення")
+    timestamp = models.DateTimeField(auto_now_add=False, verbose_name="Час створення")
     backup_file = models.CharField(max_length=255, verbose_name="Файл")
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, verbose_name="Статус")
     size_kb = models.FloatField(default=0, verbose_name="Розмір (КБ)")
