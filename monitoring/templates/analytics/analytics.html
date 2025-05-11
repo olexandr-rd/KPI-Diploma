@@ -1,0 +1,340 @@
+<!-- monitoring/templates/analytics/analytics.html - Updated version with proper chart options -->
+{% extends 'base.html' %}
+{% load template_filters %}
+
+{% block title %}Аналітика{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="row mb-4">
+        <div class="col">
+            <h1 class="h3"><i class="bi bi-graph-up"></i> Аналітика стану роботи енергосистеми</h1>
+        </div>
+    </div>
+
+    <!-- Period Selection -->
+    <div class="card shadow-sm mb-4">
+        <div class="card-body">
+            <div class="d-flex flex-wrap gap-2">
+                <a href="{% url 'analytics' %}?period=week" class="btn {% if period == 'week' %}btn-primary{% else %}btn-outline-primary{% endif %}">
+                    <i class="bi bi-calendar-week"></i> Тиждень
+                </a>
+                <a href="{% url 'analytics' %}?period=month" class="btn {% if period == 'month' %}btn-primary{% else %}btn-outline-primary{% endif %}">
+                    <i class="bi bi-calendar-month"></i> Місяць
+                </a>
+                <a href="{% url 'analytics' %}?period=year" class="btn {% if period == 'year' %}btn-primary{% else %}btn-outline-primary{% endif %}">
+                    <i class="bi bi-calendar3"></i> Рік
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Stats Summary -->
+    <div class="row g-3 mb-4">
+        <div class="col-md-3">
+            <div class="card shadow-sm">
+                <div class="card-body p-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <div class="text-muted small">Записів за період</div>
+                            <div class="h3">{{ logs_count }}</div>
+                        </div>
+                        <div class="fs-1 text-primary opacity-25">
+                            <i class="bi bi-database"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3">
+            <div class="card shadow-sm">
+                <div class="card-body p-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <div class="text-muted small">Аномалій виявлено</div>
+                            <div class="h3">{{ anomalies_count }}</div>
+                        </div>
+                        <div class="fs-1 text-danger opacity-25">
+                            <i class="bi bi-exclamation-triangle"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3">
+            <div class="card shadow-sm">
+                <div class="card-body p-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <div class="text-muted small">Середнє навантаження</div>
+                            <div class="h3">{{ avg_load|floatformat:1 }} Вт</div>
+                        </div>
+                        <div class="fs-1 text-success opacity-25">
+                            <i class="bi bi-lightning-charge"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-3">
+            <div class="card shadow-sm">
+                <div class="card-body p-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <div class="text-muted small">Пікове навантаження</div>
+                            <div class="h3">{{ peak_load|floatformat:1 }} Вт</div>
+                        </div>
+                        <div class="fs-1 text-warning opacity-25">
+                            <i class="bi bi-bar-chart"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Two Charts Side by Side -->
+    <div class="row mb-4">
+        <!-- Load Trend Chart -->
+        <div class="col-md-6">
+            <div class="card shadow-sm">
+                <div class="card-header bg-white py-3">
+                    <h5 class="mb-0">Аналіз навантаження на систему</h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="loadTrendChart" height="150"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Anomalies Trend Chart -->
+        <div class="col-md-6">
+            <div class="card shadow-sm">
+                <div class="card-header bg-white py-3">
+                    <h5 class="mb-0">Аномалії за {{ period_display }}</h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="anomaliesChart" height="150"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Backups -->
+{#    <div class="row mb-4">#}
+{#        <div class="col-12">#}
+{#            <div class="card shadow-sm h-100">#}
+{#                <div class="card-header bg-white py-3">#}
+{#                    <h5 class="mb-0">Резервні копії за видом</h5>#}
+{#                </div>#}
+{#                <div class="card-body">#}
+{#                    <canvas id="backupsChart" height="250"></canvas>#}
+{#                </div>#}
+{#            </div>#}
+{#        </div>#}
+{#    </div>#}
+
+    <!-- Parameter Anomalies Table -->
+    <div class="row">
+        <div class="col-md-6">
+            <div class="card shadow-sm">
+                <div class="card-header bg-white py-3">
+                    <h5 class="mb-0">Причини аномалій в роботі акамулятора</h5>
+                </div>
+                <div class="card-body">
+                    <div id="anomaly-parameter-data" hx-get="{% url 'anomaly_by_parameter_chart' %}?period={{ period }}"
+                         hx-trigger="load" hx-swap="innerHTML">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Backup Stats -->
+        <div class="col-md-6">
+            <div class="card shadow-sm">
+                <div class="card-header bg-white py-3">
+                    <h5 class="mb-0">Статистика резервних копій</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <div class="card bg-light">
+                                <div class="card-body p-3">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <div>
+                                            <div class="text-muted small">Всього резервних копій</div>
+                                            <div class="h4">{{ backups_count }}</div>
+                                        </div>
+                                        <div class="fs-2 text-primary opacity-25">
+                                            <i class="bi bi-server"></i>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <div class="card bg-light">
+                                <div class="card-body p-3">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <div>
+                                            <div class="text-muted small">Успішність</div>
+                                            <div class="h4">{{ backup_success_rate|floatformat:1 }}%</div>
+                                        </div>
+                                        <div class="fs-2 text-success opacity-25">
+                                            <i class="bi bi-check-circle"></i>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Load Trend Chart
+        fetch(`{% url 'load_trend_chart' %}?period={{ period }}`)
+            .then(response => response.json())
+            .then(data => {
+                const ctx = document.getElementById('loadTrendChart').getContext('2d');
+                new Chart(ctx, {
+                    type: 'line',
+                    data: data,
+                    options: {
+                        responsive: true,
+                        plugins: {
+                            title: {
+                                display: true,
+                                text: 'Тенденції навантаження системи'
+                            },
+                            tooltip: {
+                                enabled: true
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                title: {
+                                    display: true,
+                                    text: 'Навантаження (Вт)'
+                                }
+                            },
+                            x: {
+                                title: {
+                                    display: true,
+                                    text: 'Дата'
+                                }
+                            }
+                        }
+                    }
+                });
+            })
+            .catch(error => console.error('Error loading trend chart:', error));
+
+        // Anomalies Chart - Now showing total vs anomalies comparison
+        fetch(`{% url "anomalies_trend_chart" %}?period={{ period }}`)
+            .then(response => response.json())
+            .then(data => {
+                const ctx = document.getElementById('anomaliesChart').getContext('2d');
+                new Chart(ctx, {
+                    type: 'line',
+                    data: data,
+                    options: {
+                        responsive: true,
+                        plugins: {
+                            title: {
+                                display: true,
+                                text: 'Аномалії порівняно із загальною кількістю'
+                            }
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                title: {
+                                    display: true,
+                                    text: 'Кількість'
+                                },
+                                position: 'left',
+                            },
+                            y1: {
+                                beginAtZero: true,
+                                title: {
+                                    display: true,
+                                    text: 'Відсоток (%)'
+                                },
+                                position: 'right',
+                                max: 100,
+                                grid: {
+                                    drawOnChartArea: false,
+                                }
+                            }
+                        },
+                        interaction: {
+                            mode: 'index',
+                            intersect: false,
+                        }
+                    }
+                });
+            })
+            .catch(error => console.error('Error loading anomalies trend chart:', error));
+
+        // Backups Chart
+        fetch(`{% url 'backups_by_reason_chart' %}?period={{ period }}`)
+            .then(response => response.json())
+            .then(data => {
+                const ctx = document.getElementById('backupsChart').getContext('2d');
+                new Chart(ctx, {
+                    type: 'bar',
+                    data: data,
+                    options: {
+                        responsive: true,
+                        plugins: {
+                            title: {
+                                display: true,
+                                text: 'Резервні копії за причиною'
+                            },
+                            legend: {
+                                position: 'top',
+                            },
+                        },
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                title: {
+                                    display: true,
+                                    text: 'Кількість'
+                                },
+                                stacked: true,
+                            },
+                            y1: {
+                                position: 'right',
+                                beginAtZero: true,
+                                title: {
+                                    display: true,
+                                    text: 'Розмір (МБ)'
+                                },
+                                grid: {
+                                    drawOnChartArea: false,
+                                }
+                            },
+                            x: {
+                                stacked: true,
+                            }
+                        }
+                    }
+                });
+            })
+            .catch(error => console.error('Error loading backups chart:', error));
+    });
+</script>
+{% endblock %}

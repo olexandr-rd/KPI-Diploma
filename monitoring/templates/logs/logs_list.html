@@ -1,0 +1,213 @@
+{% extends 'base.html' %}
+
+{% block title %}Записи енергосистеми{% endblock %}
+
+{% block content %}
+    <div class="container-fluid py-4">
+        <div class="row mb-4">
+            <div class="col">
+                <h1 class="h3"><i class="bi bi-list-ul"></i> Записи енергосистеми</h1>
+            </div>
+        </div>
+
+        {% if messages and user.profile.is_manager %}
+            {% for message in messages %}
+                <div class="alert alert-{{ message.tags }} alert-dismissible fade show">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+            {% endfor %}
+        {% endif %}
+
+        <!-- Filters -->
+        <div class="card shadow-sm mb-4">
+            <div class="card-header bg-white py-3">
+                <h5 class="mb-0">Фільтри</h5>
+            </div>
+            <div class="card-body">
+                <form method="get" class="row g-3" id="filters-form">
+                    <div class="col-md-4">
+                        <label for="search" class="form-label">Пошук</label>
+                        <div class="input-group">
+                            <input type="text" class="form-control" id="search" name="q"
+                                   placeholder="Пошук за причиною аномалії або користувачем"
+                                   value="{{ search_query }}">
+                            <button class="btn btn-primary" type="submit">
+                                <i class="bi bi-search"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="col-md-2">
+                        <label for="anomaly" class="form-label">Аномалії</label>
+                        <select class="form-select" id="anomaly" name="anomaly">
+                            <option value="" {% if is_anomaly == '' %}selected{% endif %}>Всі</option>
+                            <option value="anomaly" {% if is_anomaly == 'anomaly' %}selected{% endif %}>Тільки аномалії
+                            </option>
+                            <option value="predicted" {% if is_anomaly == 'predicted' %}selected{% endif %}>
+                                Імовірні аномалії</option>
+                            <option value="no" {% if is_anomaly == 'no' %}selected{% endif %}>Без аномалій</option>
+                        </select>
+                    </div>
+
+                    <div class="col-md-2">
+                        <label for="manual" class="form-label">Тип запису</label>
+                        <select class="form-select" id="manual" name="manual">
+                            <option value="" {% if is_manual == '' %}selected{% endif %}>Всі</option>
+                            <option value="yes" {% if is_manual == 'yes' %}selected{% endif %}>Ручні</option>
+                            <option value="no" {% if is_manual == 'no' %}selected{% endif %}>Автоматичні</option>
+                        </select>
+                    </div>
+
+                    <div class="col-md-2">
+                        <label for="backup" class="form-label">Резервна копія</label>
+                        <select class="form-select" id="backup" name="backup">
+                            <option value="" {% if has_backup == '' %}selected{% endif %}>Всі</option>
+                            <option value="yes" {% if has_backup == 'yes' %}selected{% endif %}>З резервною копією
+                            </option>
+                            <option value="no" {% if has_backup == 'no' %}selected{% endif %}>Без резервної копії
+                            </option>
+                        </select>
+                    </div>
+
+                    <div class="col-md-2 d-flex align-items-end">
+                        <div class="d-grid w-100">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-funnel"></i> Застосувати фільтри
+                            </button>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Summary Cards -->
+        <div class="row g-3 mb-4">
+            <div class="col-md-3">
+                <div class="card text-bg-light">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between">
+                            <div>
+                                <div class="text-muted small">Всього записів</div>
+                                <div class="h3">{{ total_logs }}</div>
+                            </div>
+                            <div class="fs-1 text-muted opacity-25">
+                                <i class="bi bi-database"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-3">
+                <div class="card text-bg-danger text-white">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between">
+                            <div>
+                                <div class="text-white-50 small">Аномалії</div>
+                                <div class="h3">{{ total_anomalies }}</div>
+                            </div>
+                            <div class="fs-1 text-white opacity-25">
+                                <i class="bi bi-exclamation-triangle"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-3">
+                <div class="card text-bg-info text-white">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between">
+                            <div>
+                                <div class="text-white-50 small">Ручні записи</div>
+                                <div class="h3">{{ total_manual }}</div>
+                            </div>
+                            <div class="fs-1 text-white opacity-25">
+                                <i class="bi bi-person"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-3">
+                <div class="card text-bg-primary text-white">
+                    <div class="card-body">
+                        <div class="d-flex justify-content-between">
+                            <div>
+                                <div class="text-white-50 small">З резервною копією</div>
+                                <div class="h3">{{ total_with_backup }}</div>
+                            </div>
+                            <div class="fs-1 text-white opacity-25">
+                                <i class="bi bi-cloud-check"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Logs Table -->
+        <div class="card shadow-sm">
+            <div class="card-header bg-white d-flex justify-content-between align-items-center py-3">
+                <h5 class="mb-0">Результати</h5>
+                <div>
+                    {% if user.profile.is_manager %}
+                        <button class="btn btn-sm btn-primary"
+                                hx-post="{% url 'run_simulation' %}{% if request.GET %}?{{ request.GET.urlencode }}{% endif %}"
+                                hx-target="#logs-container"
+                                hx-indicator="#logs-indicator"
+                                hx-swap="innerHTML"
+                                hx-trigger="click">
+                            <i class="bi bi-lightning-charge"></i> Створити запис
+                            <span class="htmx-indicator spinner-border spinner-border-sm text-light" id="logs-indicator" role="status"></span>
+                        </button>
+                        <button class="btn btn-sm btn-danger"
+                                hx-post="{% url 'run_simulation_anomaly' %}{% if request.GET %}?{{ request.GET.urlencode }}{% endif %}"
+                                hx-target="#logs-container"
+                                hx-indicator="#logs-indicator-anomaly"
+                                hx-swap="innerHTML"
+                                hx-trigger="click">
+                            <i class="bi bi-exclamation-triangle"></i> Симулювати аномалію
+                            <span class="htmx-indicator spinner-border spinner-border-sm text-light" id="logs-indicator-anomaly" role="status"></span>
+                        </button>
+                        <button class="btn btn-sm btn-warning"
+                                hx-post="{% url 'run_simulation_abnormal_prediction' %}{% if request.GET %}?{{ request.GET.urlencode }}{% endif %}"
+                                hx-target="#logs-container"
+                                hx-indicator="#logs-indicator-prediction"
+                                hx-swap="innerHTML"
+                                hx-trigger="click">
+                            <i class="bi bi-graph-up"></i> Симулювати аномальний прогноз
+                            <span class="htmx-indicator spinner-border spinner-border-sm text-light" id="logs-indicator-prediction" role="status"></span>
+                        </button>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="card-body p-0" id="logs-container" hx-trigger="load from:body">
+                {% include 'logs/logs_table.html' %}
+            </div>
+        </div>
+    </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Setup listeners for filter changes
+        document.querySelectorAll('#filters-form select').forEach(select => {
+            select.addEventListener('change', function() {
+                document.querySelector('#filters-form').submit();
+            });
+        });
+
+        // Update stats when simulation is triggered
+        document.body.addEventListener('htmx:afterOnLoad', function() {
+            // Trigger a page reload to refresh all stats
+            // This is a simple approach - a more advanced would use specific AJAX calls
+            // but this ensures everything is up to date
+            window.location.reload();
+        });
+    });
+</script>
+{% endblock %}

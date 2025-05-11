@@ -1,0 +1,96 @@
+{% load template_filters %}
+<div class="row mb-4">
+    <div class="col-lg-12">
+        <div class="card shadow-sm">
+            <div class="card-header bg-white py-3">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0">Статус</h5>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-lg-9">
+                        <p><strong>Статус:</strong>
+                            {% if scheduler.is_running %}
+                                <span class="text-success">Активний</span>
+                            {% else %}
+                                <span class="text-danger">Зупинено</span>
+                            {% endif %}
+                        </p>
+
+                        {% if scheduler.is_running %}
+                            <p><strong>PID:</strong> {{ scheduler.pid }}</p>
+                            <p><strong>Запущено:</strong> {{ scheduler.started_at|date:"d.m.Y H:i:s" }}</p>
+                            <p><strong>Час роботи:</strong> {{ scheduler.uptime|format_timedelta }}</p>
+
+                            {% if scheduler.memory_mb %}
+                                <p><strong>Використання
+                                    пам'яті:</strong> {{ scheduler.memory_mb|floatformat:2 }} МБ</p>
+                            {% endif %}
+                        {% endif %}
+                    </div>
+                    <div class="col-lg-3">
+                        <div class="d-grid gap-2">
+                            {% if scheduler.is_running %}
+                                <form method="post" action="{% url 'stop_scheduler' %}">
+                                    {% csrf_token %}
+                                    <button type="submit"
+                                            class="btn btn-danger d-flex justify-content-center align-items-center w-100">
+                                        <i class="bi bi-stop-fill me-2"></i> Зупинити
+                                    </button>
+                                </form>
+
+                                <form method="post" action="{% url 'restart_scheduler' %}">
+                                    {% csrf_token %}
+                                    <button type="submit"
+                                            class="btn btn-warning d-flex justify-content-center align-items-center w-100">
+                                        <i class="bi bi-arrow-repeat me-2"></i> Перезапустити
+                                    </button>
+                                </form>
+
+                                <form method="post" action="{% url 'run_maintenance' %}">
+                                    {% csrf_token %}
+                                    <button type="submit"
+                                            class="btn btn-info d-flex justify-content-center align-items-center w-100">
+                                        <i class="bi bi-tools me-2"></i> Підтримка БД
+                                    </button>
+                                </form>
+                            {% else %}
+                                <form method="post" action="{% url 'start_scheduler' %}">
+                                    {% csrf_token %}
+                                    <button type="submit"
+                                            class="btn btn-success d-flex justify-content-center align-items-center w-100">
+                                        <i class="bi bi-play-fill me-2"></i> Запустити
+                                    </button>
+                                </form>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if scheduler.is_running %}
+    <div class="row mb-4">
+        <div class="col-lg-12">
+            <div class="card shadow-sm">
+                <div class="card-header bg-white py-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">Журнал</h5>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div class="card bg-dark text-light">
+                        <div class="card-body p-3" style="overflow-y: auto;">
+                            {% for line in scheduler.log_entries %}
+                                {{ line }}<br>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+{% endif %}
