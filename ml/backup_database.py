@@ -313,7 +313,6 @@ def backup_database(record_id=None, force=False, reason=None, user=None):
                     size_kb=file_size_kb,
                     trigger_reason=trigger_reason or "UNKNOWN",
                     created_by=user,
-                    timestamp=record.timestamp
                 )
                 logger.info(f"Created new backup log with ID {backup_log.id}")
 

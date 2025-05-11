@@ -41,15 +41,15 @@ class SystemSettingsForm(forms.ModelForm):
         }
 
 
-def manager_required(view_function=None, *, redirect_url='dashboard', message=None):
-    """Decorator to verify that a user has a manager role."""
+def admin_required(view_function=None, *, redirect_url='dashboard', message=None):
+    """Decorator to verify that a user has an admin role."""
 
     def decorator(view_func):
         @wraps(view_func)
         def wrapped_view(request, *args, **kwargs):
             try:
                 profile = request.user.profile
-                if not profile.is_manager:
+                if not profile.is_admin:
                     error_msg = message or "У вас немає прав для виконання цієї дії."
                     messages.error(request, error_msg)
                     return redirect(redirect_url)
@@ -69,7 +69,7 @@ def manager_required(view_function=None, *, redirect_url='dashboard', message=No
 
 
 @login_required
-@manager_required(message="У вас немає доступу до налаштувань планувальника.")
+@admin_required(message="У вас немає доступу до налаштувань планувальника.")
 def system_settings(request):
     """View for managing system settings - manager role required"""
 
@@ -146,7 +146,7 @@ def get_scheduler_info():
 
 
 @login_required
-@manager_required(message="У вас немає доступу до налаштувань планувальника.")
+@admin_required(message="У вас немає доступу до налаштувань планувальника.")
 def scheduler_status(request):
     """View for scheduler status"""
     scheduler_info = get_scheduler_info()
@@ -161,7 +161,7 @@ def scheduler_status(request):
 
 
 @login_required
-@manager_required(message="У вас немає прав для запуску планувальника.")
+@admin_required(message="У вас немає прав для запуску планувальника.")
 def start_scheduler(request):
     """Start the scheduler process"""
     if request.method != 'POST':
@@ -179,7 +179,7 @@ def start_scheduler(request):
 
 
 @login_required
-@manager_required(message="У вас немає прав для зупинки планувальника.")
+@admin_required(message="У вас немає прав для зупинки планувальника.")
 def stop_scheduler(request):
     """Stop the scheduler process"""
     if request.method != 'POST':
@@ -197,7 +197,7 @@ def stop_scheduler(request):
 
 
 @login_required
-@manager_required(message="У вас немає прав для перезапуску планувальника.")
+@admin_required(message="У вас немає прав для перезапуску планувальника.")
 def restart_scheduler(request):
     """Restart the scheduler process """
     if request.method != 'POST':
@@ -215,7 +215,7 @@ def restart_scheduler(request):
 
 
 @login_required
-@manager_required(message="У вас немає прав для запуску підтримки бази даних.")
+@admin_required(message="У вас немає прав для запуску підтримки бази даних.")
 def run_maintenance(request):
     """Run maintenance tasks manually"""
     if request.method != 'POST':

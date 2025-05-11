@@ -30,9 +30,12 @@ def logs_list(request):
             Q(created_by__last_name__icontains=search_query)
         )
 
-    if is_anomaly == 'yes':
-        # Include both actual anomalies and predicted anomalies
-        logs = logs.filter(Q(is_anomaly=True) | Q(is_abnormal_prediction=True))
+    if is_anomaly == 'anomaly':
+        # Include actual anomalies
+        logs = logs.filter(is_anomaly=True)
+    elif is_anomaly == 'predicted':
+        # Include predicted anomalies
+        logs = logs.filter(is_abnormal_prediction=True)
     elif is_anomaly == 'no':
         # Neither actual anomalies nor predicted anomalies
         logs = logs.filter(is_anomaly=False, is_abnormal_prediction=False)
@@ -57,7 +60,7 @@ def logs_list(request):
 
     # Count totals for summary
     total_logs = EnergyLog.objects.count()
-    total_anomalies = EnergyLog.objects.filter(Q(is_anomaly=True) | Q(is_abnormal_prediction=True)).count()
+    total_anomalies = EnergyLog.objects.filter(is_anomaly=True).count()
     total_manual = EnergyLog.objects.filter(is_manual=True).count()
     total_with_backup = EnergyLog.objects.filter(backup_triggered=True).count()
 

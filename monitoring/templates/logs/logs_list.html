@@ -42,7 +42,10 @@
                         <label for="anomaly" class="form-label">Аномалії</label>
                         <select class="form-select" id="anomaly" name="anomaly">
                             <option value="" {% if is_anomaly == '' %}selected{% endif %}>Всі</option>
-                            <option value="yes" {% if is_anomaly == 'yes' %}selected{% endif %}>Тільки аномалії</option>
+                            <option value="anomaly" {% if is_anomaly == 'anomaly' %}selected{% endif %}>Тільки аномалії
+                            </option>
+                            <option value="predicted" {% if is_anomaly == 'predicted' %}selected{% endif %}>
+                                Імовірні аномалії</option>
                             <option value="no" {% if is_anomaly == 'no' %}selected{% endif %}>Без аномалій</option>
                         </select>
                     </div>
