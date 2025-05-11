@@ -1,4 +1,4 @@
-# ml/scheduled_tasks.py - Updated version to fix race condition
+# ml/scheduled_tasks.py
 
 import os
 import django
@@ -27,8 +27,8 @@ os.makedirs(logs_dir, exist_ok=True)
 # Configure logging
 logger = logging.getLogger('scheduler')
 # Clear any existing handlers to prevent duplication
-if logger.handlers:
-    logger.handlers = []
+for handler in logger.handlers[:]:
+    logger.removeHandler(handler)
 
 logger.setLevel(logging.INFO)
 formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
@@ -211,43 +211,44 @@ def purge_old_energy_logs():
         logger.error(f"Exception during energy log purge: {str(e)}")
 
 
-def rotate_logs():
-    """Keep logs from growing too large by rotating them"""
-    logger.info("Rotating log files")
+def cleanup_old_system_logs():
+    """Limit the number of lines in log files"""
+    logger.info("Cleaning up logs")
 
     try:
-        # Rotate scheduler log
-        scheduler_log = os.path.join(logs_dir, 'scheduler.log')
-        if os.path.exists(scheduler_log):
-            # Check file size in MB
-            size_mb = os.path.getsize(scheduler_log) / (1024 * 1024)
+        max_log_lines = 1000  # Keep only the latest 1000 lines
+        logs = {
+            'scheduler.log': os.path.join(logs_dir, 'scheduler.log'),
+            'simulation.log': os.path.join(logs_dir, 'simulation.log'),
+            'backup.log': os.path.join(logs_dir, 'backup.log')
+        }
 
-            if size_mb > 5:  # Rotate if larger than 5MB
-                # Backup the current log
-                timestamp = timezone.now().strftime('%Y%m%d_%H%M%S')
-                backup_log = os.path.join(logs_dir, f'scheduler_{timestamp}.log')
+        for log_name, log_file in logs.items():
+            if os.path.exists(log_file):
+                # Check file size
+                size_kb = os.path.getsize(log_file) / 1024
+                logger.info(f"Current {log_name} size: {size_kb:.2f} KB")
 
-                # Move current log to backup
-                os.rename(scheduler_log, backup_log)
+                if size_kb > 128:  # If > 512KB, trim log
+                    # Read all lines
+                    with open(log_file, 'r') as f:
+                        lines = f.readlines()
 
-                # Create a new empty log file
-                with open(scheduler_log, 'w') as f:
-                    f.write(f"Log rotated at {timezone.now()} - Previous log saved as {os.path.basename(backup_log)}\n")
+                    # Keep only the latest lines
+                    if len(lines) > max_log_lines:
+                        logger.info(f"Trimming {log_name} from {len(lines)} to {max_log_lines} lines")
+                        lines = lines[-max_log_lines:]
 
-                logger.info(f"Rotated scheduler log (was {size_mb:.2f}MB)")
+                        # Write back the trimmed log
+                        with open(log_file, 'w') as f:
+                            f.writelines(lines)
 
-                # Delete older log files (keep last 5)
-                old_logs = sorted([f for f in os.listdir(logs_dir) if f.startswith('scheduler_')], reverse=True)
-                if len(old_logs) > 5:
-                    for old_log in old_logs[5:]:
-                        try:
-                            os.remove(os.path.join(logs_dir, old_log))
-                            logger.info(f"Deleted old log file: {old_log}")
-                        except Exception as e:
-                            logger.error(f"Error deleting old log {old_log}: {e}")
+                        # Log size after trimming
+                        size_kb_after = os.path.getsize(log_file) / 1024
+                        logger.info(f"{log_name} trimmed to {size_kb_after:.2f} KB")
 
     except Exception as e:
-        logger.error(f"Error during log rotation: {e}")
+        logger.error(f"Error cleaning up logs: {e}")
 
 
 @prioritized_job_wrapper
@@ -255,10 +256,7 @@ def run_maintenance():
     """Run all maintenance tasks"""
     logger.info("Running maintenance tasks")
 
-    # Rotate logs before other maintenance tasks
-    rotate_logs()
-
-    # Run database maintenance
+    cleanup_old_system_logs()
     cleanup_old_backups()
     purge_old_energy_logs()
 

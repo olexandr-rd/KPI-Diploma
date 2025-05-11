@@ -6,3 +6,5 @@ scikit-learn==1.6.1
 joblib==1.4.2
 psutil==7.0.0
 schedule==1.2.2
+django-scheduler~=0.10.1
+python-dotenv~=1.1.0

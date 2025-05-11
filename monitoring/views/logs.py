@@ -5,8 +5,8 @@ from django.contrib.auth.decorators import login_required
 from django.core.paginator import Paginator
 from django.db.models import Q
 
-from . import get_stats
-from ..models import EnergyLog, SystemSettings, UserProfile
+
+from ..models import EnergyLog, UserProfile
 
 
 @login_required
@@ -31,9 +31,11 @@ def logs_list(request):
         )
 
     if is_anomaly == 'yes':
-        logs = logs.filter(is_anomaly=True)
+        # Include both actual anomalies and predicted anomalies
+        logs = logs.filter(Q(is_anomaly=True) | Q(is_abnormal_prediction=True))
     elif is_anomaly == 'no':
-        logs = logs.filter(is_anomaly=False)
+        # Neither actual anomalies nor predicted anomalies
+        logs = logs.filter(is_anomaly=False, is_abnormal_prediction=False)
 
     if is_manual == 'yes':
         logs = logs.filter(is_manual=True)
@@ -55,7 +57,7 @@ def logs_list(request):
 
     # Count totals for summary
     total_logs = EnergyLog.objects.count()
-    total_anomalies = EnergyLog.objects.filter(is_anomaly=True).count()
+    total_anomalies = EnergyLog.objects.filter(Q(is_anomaly=True) | Q(is_abnormal_prediction=True)).count()
     total_manual = EnergyLog.objects.filter(is_manual=True).count()
     total_with_backup = EnergyLog.objects.filter(backup_triggered=True).count()
 
