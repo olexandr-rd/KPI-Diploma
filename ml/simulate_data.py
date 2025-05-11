@@ -1,4 +1,4 @@
-# ml/simulate_data.py
+# ml/simulate_data.py - Final update with natural anomaly chance
 
 import os
 import django
@@ -62,13 +62,41 @@ def create_energy_reading(simulation_type=None, is_manual=False, user=None):
         load_power = np.random.normal(1250, 150)  # Normal power range
         temperature = np.random.normal(55, 5)  # High battery temperature
     else:
-        # Create normal data for both normal and abnormal_prediction types
-        # For abnormal_prediction, we'll use force_abnormal_prediction flag later
-        ac_output_voltage = np.random.normal(230, 3)
-        dc_battery_voltage = np.random.normal(24, 0.5)
-        dc_battery_current = np.random.normal(10, 1)
-        load_power = np.random.normal(1250, 150)  # Normal power range
-        temperature = np.random.normal(35, 1)  # Normal battery temperature
+        # For normal simulation, create mostly normal data but with occasional slightly anomalous values
+        anomaly_chance = 0.15  # 15% chance of natural anomaly
+
+        if simulation_type != 'abnormal_prediction' and np.random.random() < anomaly_chance:
+            # Create slightly anomalous data - but not as extreme as forced anomalies
+            logger.info("Creating slightly anomalous data in normal simulation")
+            anomaly_type = np.random.choice(['voltage', 'current', 'temperature'])
+
+            if anomaly_type == 'voltage':
+                ac_output_voltage = np.random.normal(np.random.choice([210, 250]), 3)  # Slightly off voltage
+                dc_battery_voltage = np.random.normal(24, 0.5)  # Normal
+                dc_battery_current = np.random.normal(10, 1)  # Normal
+            elif anomaly_type == 'current':
+                ac_output_voltage = np.random.normal(230, 3)  # Normal
+                dc_battery_voltage = np.random.normal(24, 0.5)  # Normal
+                dc_battery_current = np.random.normal(np.random.choice([4, 17]), 1)  # Slightly off current
+            else:  # temperature
+                ac_output_voltage = np.random.normal(230, 3)  # Normal
+                dc_battery_voltage = np.random.normal(24, 0.5)  # Normal
+                dc_battery_current = np.random.normal(10, 1)  # Normal
+                temperature = np.random.normal(50, 2)  # High temperature
+
+            # Use normal load power regardless of anomaly type
+            load_power = np.random.normal(1250, 150)
+
+            # Set temperature if not already set
+            if 'temperature' not in locals():
+                temperature = np.random.normal(35, 1)
+        else:
+            # Completely normal data
+            ac_output_voltage = np.random.normal(230, 3)
+            dc_battery_voltage = np.random.normal(24, 0.5)
+            dc_battery_current = np.random.normal(10, 1)
+            load_power = np.random.normal(1250, 150)
+            temperature = np.random.normal(35, 1)
 
     # Save to DB
     log = EnergyLog.objects.create(
@@ -118,6 +146,7 @@ def run_simulation_with_type(simulation_type=None, is_manual=False, user_id=None
         from ml.apply_models_to_record import apply_models_to_record
 
         # Set force parameters based on simulation type
+        # Only force anomalies/predictions when explicitly requested
         force_abnormal = (simulation_type == 'abnormal_prediction')
         force_anomaly = (simulation_type == 'anomaly')
 
@@ -144,7 +173,13 @@ def run_simulation_with_type(simulation_type=None, is_manual=False, user_id=None
             case 'abnormal_prediction':
                 simulation_message = "Симуляція аномального прогнозу"
             case _:
-                simulation_message = "Симуляція звичайних даних"
+                # For normal simulation, check if we naturally got an anomaly or abnormal prediction
+                if log.is_anomaly:
+                    simulation_message = "Симуляція звичайних даних (виявлено аномалію)"
+                elif log.is_abnormal_prediction:
+                    simulation_message = "Симуляція звичайних даних (виявлено аномальний прогноз)"
+                else:
+                    simulation_message = "Симуляція звичайних даних"
 
         return log.id, simulation_message
 

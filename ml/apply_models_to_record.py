@@ -176,7 +176,6 @@ def apply_models_to_record(record_id=None, force_abnormal_prediction=False, forc
         # Choose a random feature to blame
         import random
         feature = random.choice(list(feature_name_map.keys()))
-        value = features[feature].iloc[0]
         anomaly_reasons = f"{feature_name_map[feature]}"
     else:
         # Use the model to detect anomalies

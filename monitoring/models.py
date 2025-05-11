@@ -59,11 +59,6 @@ class SystemSettings(models.Model):
         verbose_name_plural = "Налаштування планувальника"
 
 
-def get_anomaly_score_explanation():
-    """Provides an explanation of the anomaly score scale"""
-    return "Оцінка аномалії від -1 до 1. Значення менше 0 вважаються аномаліями, де -1 - найбільш аномальне."
-
-
 class EnergyLog(models.Model):
     timestamp = models.DateTimeField(auto_now_add=True, verbose_name="Час запису")
 
