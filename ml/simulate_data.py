@@ -1,4 +1,4 @@
-# ml/simulate_data.py - Updated to use force_abnormal_prediction flag
+# ml/simulate_data.py
 
 import os
 import django
@@ -61,15 +61,9 @@ def create_energy_reading(simulation_type=None, is_manual=False, user=None):
         dc_battery_current = np.random.normal(10, 8)  # Unstable current
         load_power = np.random.normal(1250, 150)  # Normal power range
         temperature = np.random.normal(55, 5)  # High battery temperature
-    elif simulation_type == 'abnormal_prediction':
-        # Create abnormal prediction data
-        ac_output_voltage = np.random.choice([215.0, 245.0])  # Outside 220-240V normal range
-        dc_battery_current = np.random.choice([4.0, 16.0])  # Outside 5-15A normal range
-        dc_battery_voltage = np.random.normal(24, 0.5)
-        load_power = np.random.normal(1250, 150)  # Normal power range
-        temperature = np.random.normal(35, 1)  # Normal battery temperature
     else:
-        # Create normal data
+        # Create normal data for both normal and abnormal_prediction types
+        # For abnormal_prediction, we'll use force_abnormal_prediction flag later
         ac_output_voltage = np.random.normal(230, 3)
         dc_battery_voltage = np.random.normal(24, 0.5)
         dc_battery_current = np.random.normal(10, 1)
@@ -120,18 +114,28 @@ def run_simulation_with_type(simulation_type=None, is_manual=False, user_id=None
         log = create_energy_reading(simulation_type=simulation_type, is_manual=is_manual, user=user)
         logger.info(f"Created new energy log with ID: {log.id}")
 
-        # 2. Apply ML models to the new reading, with force_abnormal_prediction if needed
+        # 2. Apply ML models to the new reading, with force parameters if needed
         from ml.apply_models_to_record import apply_models_to_record
-        force_abnormal = simulation_type == 'abnormal_prediction'
+
+        # Set force parameters based on simulation type
+        force_abnormal = (simulation_type == 'abnormal_prediction')
+        force_anomaly = (simulation_type == 'anomaly')
 
         is_anomaly, anomaly_score, predicted_current, predicted_voltage = apply_models_to_record(
             log.id,
-            force_abnormal_prediction=force_abnormal
+            force_abnormal_prediction=force_abnormal,
+            force_anomaly=force_anomaly
         )
 
         logger.info(f"Applied models to record {log.id}")
         logger.info(f"Is anomaly: {is_anomaly}, Score: {anomaly_score}")
         logger.info(f"Predicted current: {predicted_current:.2f}A, Predicted voltage: {predicted_voltage:.2f}V")
+
+        # Get updated record
+        log.refresh_from_db()
+        logger.info(
+            f"Final status - Is anomaly: {log.is_anomaly}, Is abnormal prediction: {log.is_abnormal_prediction}, "
+            f"Backup triggered: {log.backup_triggered}")
 
         # 3. Determine the simulation message for the user
         match simulation_type:

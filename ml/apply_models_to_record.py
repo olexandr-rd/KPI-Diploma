@@ -107,7 +107,7 @@ def check_prediction_thresholds(predicted_current, predicted_voltage):
     return False
 
 
-def apply_models_to_record(record_id=None, force_abnormal_prediction=False):
+def apply_models_to_record(record_id=None, force_abnormal_prediction=False, force_anomaly=False):
     """
     Apply ML models to a single energy record or the latest if no ID provided
     With enhanced anomaly explanation
@@ -115,6 +115,7 @@ def apply_models_to_record(record_id=None, force_abnormal_prediction=False):
     Args:
         record_id: ID of record to analyze, or None for latest
         force_abnormal_prediction: If True, force abnormal prediction values regardless of model output
+        force_anomaly: If True, force this record to be marked as an anomaly
 
     Returns:
         tuple: (is_anomaly, anomaly_score, predicted_current, predicted_voltage)
@@ -158,28 +159,53 @@ def apply_models_to_record(record_id=None, force_abnormal_prediction=False):
     })
 
     # === Anomaly Detection ===
-    anomaly_pred = anomaly_model.predict(features)[0]
-    anomaly_score = anomaly_model.decision_function(features)[0]
-    is_anomaly = anomaly_pred == -1
+    if force_anomaly:
+        # Force this record to be an anomaly
+        is_anomaly = True
+        anomaly_score = -0.95  # Strongly anomalous score
+        print(f"Forced anomaly for record {record.id}")
 
-    # Get explanation if it's an anomaly
-    anomaly_reasons = []
-    if is_anomaly:
-        try:
-            # Calculate feature scores
-            feature_scores = calculate_feature_scores(anomaly_model, features)
+        # Generate a reason for the forced anomaly
+        feature_name_map = {
+            'ac_output_voltage': 'Змінна напруга',
+            'dc_battery_voltage': 'Постійна напруга',
+            'dc_battery_current': 'Постійний струм',
+            'load_power': 'Навантаження',
+            'temperature': 'Температура'
+        }
+        # Choose a random feature to blame
+        import random
+        feature = random.choice(list(feature_name_map.keys()))
+        value = features[feature].iloc[0]
+        anomaly_reasons = f"{feature_name_map[feature]}"
+    else:
+        # Use the model to detect anomalies
+        anomaly_pred = anomaly_model.predict(features)[0]
+        anomaly_score = anomaly_model.decision_function(features)[0]
+        is_anomaly = anomaly_pred == -1
 
-            # Get human-readable explanation
-            anomaly_reasons = get_anomaly_explanation(features, feature_scores)
-        except Exception as e:
-            print(f"Error generating anomaly explanation: {str(e)}")
-            anomaly_reasons = ["Виявлено аномалію"]
+        # Get explanation if it's an anomaly
+        anomaly_reasons = []
+        if is_anomaly:
+            try:
+                # Calculate feature scores
+                feature_scores = calculate_feature_scores(anomaly_model, features)
+
+                # Get human-readable explanation
+                anomaly_reasons = get_anomaly_explanation(features, feature_scores)
+            except Exception as e:
+                print(f"Error generating anomaly explanation: {str(e)}")
+                anomaly_reasons = ["Виявлено аномалію"]
 
     # === Prediction ===
+    # If force_abnormal_prediction is True, set extreme values
+    # Otherwise, use the model to predict values
     if force_abnormal_prediction:
         # Set extreme values that are guaranteed to be outside normal ranges
         predicted_current = np.random.choice([4.0, 16.0])  # Outside 5-15A normal range
         predicted_voltage = np.random.choice([215.0, 245.0])  # Outside 220-240V normal range
+
+        # Force this to be true because we're explicitly setting abnormal values
         is_abnormal_prediction = True
 
         print(f"Forced abnormal prediction: current={predicted_current}A, voltage={predicted_voltage}V")
@@ -187,7 +213,15 @@ def apply_models_to_record(record_id=None, force_abnormal_prediction=False):
         # Normal case: use the model to predict
         prediction = forecast_model.predict(features)[0]
         predicted_current, predicted_voltage = prediction[0], prediction[1]
+
+        # Check if predictions are within normal ranges
         is_abnormal_prediction = check_prediction_thresholds(predicted_current, predicted_voltage)
+
+    # Update record with anomaly results
+    # When forcing abnormal predictions, make sure is_anomaly=False (unless we're also forcing anomalies)
+    record.is_anomaly = is_anomaly if not force_abnormal_prediction or force_anomaly else False
+    record.anomaly_score = anomaly_score
+    record.anomaly_reason = str(anomaly_reasons) if anomaly_reasons else None
 
     # Update record with prediction results
     record.predicted_current = predicted_current
@@ -203,29 +237,41 @@ def apply_models_to_record(record_id=None, force_abnormal_prediction=False):
             if backup_performed:
                 print(
                     f"Backup created for record {record.id} due to {'anomaly' if is_anomaly else 'abnormal prediction'}")
+
+                # Update the record to indicate backup was triggered
+                record.backup_triggered = True
+                record.save()
+            else:
+                print(f"Backup not created for record {record.id} despite meeting conditions")
         except Exception as e:
             print(f"Error triggering backup for record {record.id}: {e}")
 
     print(f"Applied models to record {record.id}")
-    print(f"Is anomaly: {is_anomaly}, Score: {anomaly_score}")
+    print(f"Is anomaly: {record.is_anomaly}, Score: {anomaly_score}")
     if anomaly_reasons:
         print(f"Anomaly reasons: {anomaly_reasons}")
     print(f"Predicted NEXT current: {predicted_current:.2f}A, Predicted NEXT voltage: {predicted_voltage:.2f}V")
     print(f"Is abnormal prediction: {is_abnormal_prediction}")
+    print(f"Backup triggered: {record.backup_triggered}")
 
-    return is_anomaly, anomaly_score, predicted_current, predicted_voltage
+    return record.is_anomaly, anomaly_score, predicted_current, predicted_voltage
 
 
 if __name__ == "__main__":
     # If record ID is provided as command line argument, use it
     record_id = sys.argv[1] if len(sys.argv) > 1 else None
 
-    # Check if force_abnormal_prediction flag is provided
+    # Check for options
     force_abnormal = False
-    if len(sys.argv) > 2 and sys.argv[2].lower() in ('true', 't', 'yes', 'y', '1'):
-        force_abnormal = True
+    force_anomaly = False
+
+    if len(sys.argv) > 2:
+        if 'abnormal' in sys.argv[2].lower():
+            force_abnormal = True
+        if 'anomaly' in sys.argv[2].lower():
+            force_anomaly = True
 
     if record_id:
-        apply_models_to_record(int(record_id), force_abnormal_prediction=force_abnormal)
+        apply_models_to_record(int(record_id), force_abnormal_prediction=force_abnormal, force_anomaly=force_anomaly)
     else:
-        apply_models_to_record(force_abnormal_prediction=force_abnormal)
+        apply_models_to_record(force_abnormal_prediction=force_abnormal, force_anomaly=force_anomaly)
