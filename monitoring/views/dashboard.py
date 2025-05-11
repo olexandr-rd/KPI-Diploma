@@ -61,40 +61,23 @@ def get_stats():
     if next_maintenance < local_now:
         next_maintenance += timedelta(days=1)
 
-    # Next scheduled backup
     backup_hours = settings.backup_frequency_hours
     if backup_hours <= 0:
         backup_hours = 24  # Default to daily
 
+    # Convert hours to minutes for calculation
     backup_interval_minutes = backup_hours * 60
-    backup_minutes_since_midnight = (local_now - local_now.replace(hour=0, minute=0, second=0, microsecond=0)).total_seconds() / 60
-    next_backup_interval = ((backup_minutes_since_midnight // backup_interval_minutes) + 1) * backup_interval_minutes
-    backup_minutes_to_add = next_backup_interval - backup_minutes_since_midnight
 
-    # Find the last backup first
-    last_backup = BackupLog.objects.filter(
-        trigger_reason='SCHEDULED',
-        status='SUCCESS'
-    ).order_by('-timestamp').first()
+    # Get the current time in local timezone
+    local_now = timezone.localtime(now)
+    midnight = local_now.replace(hour=0, minute=0, second=0, microsecond=0)
+    minutes_since_midnight = (local_now - midnight).total_seconds() / 60
+    next_backup_interval = ((minutes_since_midnight // backup_interval_minutes) + 1) * backup_interval_minutes
+    next_backup = midnight + timedelta(minutes=next_backup_interval)
 
-    if last_backup:
-        # Calculate next scheduled backup time (aligned to intervals from midnight)
-        hours_since_last = (now - last_backup.timestamp).total_seconds() / 3600
-        hours_until_next = backup_hours - (hours_since_last % backup_hours)
-        next_backup = now + timedelta(hours=hours_until_next)
-        # Align to the calculated time in local timezone
-        local_next_backup = timezone.localtime(next_backup)
-        backup_time = local_next_backup.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(minutes=next_backup_interval)
-        next_backup = backup_time if backup_time > local_next_backup else backup_time + timedelta(days=1)
-    else:
-        # If no previous scheduled backup, use aligned time in local timezone
-        local_now = timezone.localtime(now)
-        next_backup = local_now.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(minutes=next_backup_interval)
-        if next_backup < local_now:
-            next_backup += timedelta(days=1)
-
-    # Convert next_data_collection to local timezone for display
-    next_data_collection = timezone.localtime(next_data_collection)
+    # If the calculated time is in the past, add a day
+    if next_backup < local_now:
+        next_backup += timedelta(days=1)
 
     # Check if scheduler is running
     scheduler_active = False

@@ -1,4 +1,4 @@
-# ml/simulate_data.py
+# ml/simulate_data.py - Updated to use force_abnormal_prediction flag
 
 import os
 import django
@@ -62,38 +62,12 @@ def create_energy_reading(simulation_type=None, is_manual=False, user=None):
         load_power = np.random.normal(1250, 150)  # Normal power range
         temperature = np.random.normal(55, 5)  # High battery temperature
     elif simulation_type == 'abnormal_prediction':
-
-        # Create a scenario that's near normal but will push the prediction out of bounds
-        scenario = np.random.choice(['low_current', 'high_current', 'low_voltage', 'high_voltage'])
-
-        if scenario == 'low_current':
-            # This should predict a very low battery current (below 5A)
-            ac_output_voltage = np.random.normal(229, 1)  # Near lower end of normal voltage
-            dc_battery_voltage = np.random.normal(23.5, 0.2)  # Lower battery voltage
-            dc_battery_current = np.random.normal(5.5, 0.3)  # Near lower end of normal current
-            load_power = np.random.normal(800, 50)  # Low load tends to correlate with low current
-            temperature = np.random.normal(37, 1)  # Slightly above normal temp
-        elif scenario == 'high_current':
-            # This should predict a very high battery current (above 15A)
-            ac_output_voltage = np.random.normal(231, 1)  # Near upper end of normal voltage
-            dc_battery_voltage = np.random.normal(24.5, 0.2)  # Higher battery voltage
-            dc_battery_current = np.random.normal(14.5, 0.3)  # Near upper end of normal current
-            load_power = np.random.normal(1800, 50)  # High load tends to correlate with high current
-            temperature = np.random.normal(38, 1)  # Higher temperature
-        elif scenario == 'low_voltage':
-            # This should predict a very low AC voltage (below 220V)
-            ac_output_voltage = np.random.normal(221, 1)  # Near lower end of normal voltage
-            dc_battery_voltage = np.random.normal(23.8, 0.2)  # Lower battery voltage
-            dc_battery_current = np.random.normal(9, 0.5)  # Normal current
-            load_power = np.random.normal(1000, 100)  # Normal load
-            temperature = np.random.normal(36, 1)  # Normal temperature
-        else:  # high_voltage
-            # This should predict a very high AC voltage (above 240V)
-            ac_output_voltage = np.random.normal(239, 1)  # Near upper end of normal voltage
-            dc_battery_voltage = np.random.normal(24.2, 0.2)  # Higher battery voltage
-            dc_battery_current = np.random.normal(11, 0.5)  # Normal current
-            load_power = np.random.normal(1500, 100)  # Normal load
-            temperature = np.random.normal(39, 1)  # Slightly higher temperature
+        # Create abnormal prediction data
+        ac_output_voltage = np.random.choice([215.0, 245.0])  # Outside 220-240V normal range
+        dc_battery_current = np.random.choice([4.0, 16.0])  # Outside 5-15A normal range
+        dc_battery_voltage = np.random.normal(24, 0.5)
+        load_power = np.random.normal(1250, 150)  # Normal power range
+        temperature = np.random.normal(35, 1)  # Normal battery temperature
     else:
         # Create normal data
         ac_output_voltage = np.random.normal(230, 3)
@@ -146,9 +120,14 @@ def run_simulation_with_type(simulation_type=None, is_manual=False, user_id=None
         log = create_energy_reading(simulation_type=simulation_type, is_manual=is_manual, user=user)
         logger.info(f"Created new energy log with ID: {log.id}")
 
-        # 2. Apply ML models to the new reading
+        # 2. Apply ML models to the new reading, with force_abnormal_prediction if needed
         from ml.apply_models_to_record import apply_models_to_record
-        is_anomaly, anomaly_score, predicted_current, predicted_voltage = apply_models_to_record(log.id)
+        force_abnormal = simulation_type == 'abnormal_prediction'
+
+        is_anomaly, anomaly_score, predicted_current, predicted_voltage = apply_models_to_record(
+            log.id,
+            force_abnormal_prediction=force_abnormal
+        )
 
         logger.info(f"Applied models to record {log.id}")
         logger.info(f"Is anomaly: {is_anomaly}, Score: {anomaly_score}")

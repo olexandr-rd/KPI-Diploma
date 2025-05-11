@@ -5,6 +5,7 @@ import django
 import pandas as pd
 import joblib
 import sys
+import numpy as np
 from pathlib import Path
 
 # Get the absolute path to the project directory
@@ -106,13 +107,14 @@ def check_prediction_thresholds(predicted_current, predicted_voltage):
     return False
 
 
-def apply_models_to_record(record_id=None):
+def apply_models_to_record(record_id=None, force_abnormal_prediction=False):
     """
     Apply ML models to a single energy record or the latest if no ID provided
     With enhanced anomaly explanation
 
     Args:
         record_id: ID of record to analyze, or None for latest
+        force_abnormal_prediction: If True, force abnormal prediction values regardless of model output
 
     Returns:
         tuple: (is_anomaly, anomaly_score, predicted_current, predicted_voltage)
@@ -173,20 +175,19 @@ def apply_models_to_record(record_id=None):
             print(f"Error generating anomaly explanation: {str(e)}")
             anomaly_reasons = ["Виявлено аномалію"]
 
-    # Update record with anomaly results
-    record.is_anomaly = is_anomaly
-    record.anomaly_score = anomaly_score
-    record.anomaly_reason = str(anomaly_reasons) if anomaly_reasons else None
-    record.save()
-
     # === Prediction ===
-    # Predict NEXT battery current and AC output voltage
-    # The model expects the same feature format and returns [next_current, next_voltage]
-    prediction = forecast_model.predict(features)[0]
-    predicted_current, predicted_voltage = prediction[0], prediction[1]
+    if force_abnormal_prediction:
+        # Set extreme values that are guaranteed to be outside normal ranges
+        predicted_current = np.random.choice([4.0, 16.0])  # Outside 5-15A normal range
+        predicted_voltage = np.random.choice([215.0, 245.0])  # Outside 220-240V normal range
+        is_abnormal_prediction = True
 
-    # Check if predictions are within normal ranges
-    is_abnormal_prediction = check_prediction_thresholds(predicted_current, predicted_voltage)
+        print(f"Forced abnormal prediction: current={predicted_current}A, voltage={predicted_voltage}V")
+    else:
+        # Normal case: use the model to predict
+        prediction = forecast_model.predict(features)[0]
+        predicted_current, predicted_voltage = prediction[0], prediction[1]
+        is_abnormal_prediction = check_prediction_thresholds(predicted_current, predicted_voltage)
 
     # Update record with prediction results
     record.predicted_current = predicted_current
@@ -219,7 +220,12 @@ if __name__ == "__main__":
     # If record ID is provided as command line argument, use it
     record_id = sys.argv[1] if len(sys.argv) > 1 else None
 
+    # Check if force_abnormal_prediction flag is provided
+    force_abnormal = False
+    if len(sys.argv) > 2 and sys.argv[2].lower() in ('true', 't', 'yes', 'y', '1'):
+        force_abnormal = True
+
     if record_id:
-        apply_models_to_record(int(record_id))
+        apply_models_to_record(int(record_id), force_abnormal_prediction=force_abnormal)
     else:
-        apply_models_to_record()
+        apply_models_to_record(force_abnormal_prediction=force_abnormal)
