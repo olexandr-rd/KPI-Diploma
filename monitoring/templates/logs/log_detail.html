@@ -211,58 +211,14 @@
                                 <h5 class="card-title mb-0">Прогнозування параметрів системи</h5>
                             </div>
                             <div class="card-body">
-                                {#                                <div class="row g-3">#}
-                                {#                                    <div class="col-sm-12 col-lg-4">#}
-                                {#                                        <div class="card bg-light">#}
-                                {#                                            <div class="card-body p-3">#}
-                                {#                                                <h6 class="card-title">Струм акамулятора</h6>#}
-                                {#                                                <p class="h4 mb-0">#}
-                                {#                                                    {% if log.predicted_current %}#}
-                                {#                                                        {{ log.predicted_current|floatformat:2 }} <small>А</small>#}
-                                {#                                                    {% else %}#}
-                                {#                                                        — <small>А</small>#}
-                                {#                                                    {% endif %}#}
-                                {#                                                </p>#}
-                                {#                                            </div>#}
-                                {#                                        </div>#}
-                                {#                                    </div>#}
-                                {#                                    <div class="col-sm-12 col-lg-4">#}
-                                {#                                        <div class="card bg-light">#}
-                                {#                                            <div class="card-body p-3">#}
-                                {#                                                <h6 class="card-title">Напруга</h6>#}
-                                {#                                                <p class="h4 mb-0">#}
-                                {#                                                    {% if log.predicted_voltage %}#}
-                                {#                                                        {{ log.predicted_voltage|floatformat:2 }} <small>В</small>#}
-                                {#                                                    {% else %}#}
-                                {#                                                        — <small>В</small>#}
-                                {#                                                    {% endif %}#}
-                                {#                                                </p>#}
-                                {#                                            </div>#}
-                                {#                                        </div>#}
-                                {#                                    </div>#}
-                                {#                                    <div class="col-sm-12 col-lg-4">#}
-                                {#                                        <div class="card bg-light">#}
-                                {#                                            <div class="card-body p-3">#}
-                                {#                                                <h6 class="card-title">Статус</h6>#}
-                                {#                                                <p class="h4 mb-0">#}
-                                {#                                                    {% if log.is_abnormal_prediction %}#}
-                                {#                                                        <span class="badge bg-warning text-dark">Аномальний</span>#}
-                                {#                                                    {% else %}#}
-                                {#                                                        <span class="badge bg-success">Нормальний</span>#}
-                                {#                                                    {% endif %}#}
-                                {#                                                </p>#}
-                                {#                                            </div>#}
-                                {#                                        </div>#}
-                                {#                                    </div>#}
-                                {#                                </div>#}
                                 <table class="table table-sm">
-                                                                        <tr>
+                                    <tr>
                                         <th style="width: 50%">Змінна напруга акамулятора:</th>
                                         <td>{{ log.predicted_voltage|floatformat:2 }} В</td>
                                     </tr>
                                     <tr>
                                         <th>Постійний струм акамулятора:</th>
-                                        <td>{{ log.predicted_current|floatformat:2 }} В</td>
+                                        <td>{{ log.predicted_current|floatformat:2 }} А</td>
                                     </tr>
                                     <tr>
                                         <th>Статус прогнозу:</th>
