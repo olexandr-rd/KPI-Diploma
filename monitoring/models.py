@@ -97,11 +97,11 @@ class EnergyLog(models.Model):
 
         # IsolationForest returns negative scores for anomalies, with lower values being more anomalous
         if self.anomaly_score < -0.5:
-            return "Висока ймовірність"
+            return "Висока аномальність"
         elif self.anomaly_score < -0.3:
-            return "Середня ймовірність"
+            return "Середня аномальність"
         elif self.anomaly_score < 0:
-            return "Низька ймовірність"
+            return "Низька аномальність"
         else:
             return "Норма"
 
