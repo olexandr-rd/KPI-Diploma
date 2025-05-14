@@ -43,4 +43,4 @@ for i in range(num_entries):
     )
     # apply_models_to_record()
 
-print(f"Simulated {num_entries} inverter logs.")
+print(f"Simulated {num_entries} logs.")
